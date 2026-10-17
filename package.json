@@ -1,0 +1,13 @@
+{
+  "name": "tomo",
+  "version": "0.1.0",
+  "description": "Harness-agnostic AI SDD (AI-SDLC) toolset",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "install": "node scripts/install.js",
+    "test": "node --test --test-concurrency=1 tests/*.test.js"
+  }
+}

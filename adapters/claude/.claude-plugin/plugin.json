@@ -1,0 +1,10 @@
+{
+  "name": "tomo",
+  "version": "0.1.0",
+  "description": "Harness-agnostic AI SDD (AI-SDLC) toolset: /tomo commands for requirements, design, plan, and session handoff.",
+  "author": {
+    "name": "briantimmer",
+    "url": "https://github.com/briantimmer"
+  },
+  "hooks": "./hooks/hooks.json"
+}
