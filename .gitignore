@@ -3,6 +3,7 @@ node_modules/
 adapters/common/
 *.log
 .DS_Store
+.aider*
 
 # Harness install output — generated, never committed (AGENTS.md: "nothing
 # generated is ever committed"). .opencode/, .claude/, and .agents/ are wholly
