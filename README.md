@@ -1,4 +1,4 @@
-# Tomo (友), harness-agnostic AI SDD (AI-SDLC) toolset
+# Tomo (友) 🤝, harness-agnostic AI SDD (AI-SDLC) toolset
 
 Tomo runs a structured software development lifecycle as an agent workflow that
 installs into any AI coding harness. One canonical prompt body per step
