@@ -250,6 +250,7 @@ func IssueNew(root, issuesDir string, opts issues.NewIssueOptions) (string, erro
 const Usage = `tomo — harness-agnostic AI SDD toolset
 
 Usage:
+  tomo version                   print the version
   tomo install [--global] [--project <dir>] [--provider <ids|all>]
   tomo render [--out <dir>]      dump the rendered files (debug)
   tomo check                     validate the content store + vocabulary

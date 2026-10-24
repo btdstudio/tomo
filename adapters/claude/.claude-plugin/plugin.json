@@ -1,6 +1,6 @@
 {
   "name": "tomo",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Harness-agnostic AI SDD (AI-SDLC) toolset: /tomo commands for requirements, design, plan, and session handoff.",
   "author": {
     "name": "btdstudio",

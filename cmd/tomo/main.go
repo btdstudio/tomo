@@ -16,6 +16,7 @@ import (
 	"github.com/btdstudio/tomo/internal/install"
 	"github.com/btdstudio/tomo/internal/providers"
 	"github.com/btdstudio/tomo/internal/render"
+	"github.com/btdstudio/tomo/internal/version"
 )
 
 func main() {
@@ -28,6 +29,9 @@ func run(args []string) int {
 		return 1
 	}
 	switch args[0] {
+	case "version", "--version", "-v":
+		fmt.Printf("tomo version v%s\n", version.Version)
+		return 0
 	case "install":
 		return runInstall(args[1:])
 	case "render":
