@@ -1,9 +1,9 @@
-node_modules/
 .tomo/
-adapters/common/
 *.log
 .DS_Store
 .aider*
+/tomo
+/tomo.exe
 
 # Harness install output — generated, never committed (AGENTS.md: "nothing
 # generated is ever committed"). .opencode/, .claude/, and .agents/ are wholly

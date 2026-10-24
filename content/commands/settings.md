@@ -5,8 +5,9 @@ supersedes the global value. Nothing is stored in the harness.
 
 Read the sources and report the effective merge:
 
-1. If `.tomo/lib/settings.js` exists, load effective settings with it
-   (defaults ← global ← project) and print the keys.
+1. If the `tomo` binary is available (or `.tomo/bin/tomo`), load effective
+   settings with `tomo settings` (defaults ← global ← project) and print the
+   keys.
 2. Otherwise, read `~/.config/tomo/settings.json` and `.tomo/settings.json`
    directly (missing files count as `{}`), overlay project onto global, and
    print:

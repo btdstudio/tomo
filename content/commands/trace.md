@@ -2,11 +2,10 @@
 
 ## Persona
 
-Resolve this step's persona with `.tomo/lib/personas.js` `resolvePersona(
-'trace', settings)` (load effective settings with `.tomo/lib/settings.js` when
-present) and adopt it: read the profile — `.tomo/personas/<id>.md` for a
-built-in, or the resolved file path for a custom persona — and run the step as
-that persona. By default this is the **reviewer** (senior engineer tracing
+Resolve this step's persona with `tomo persona trace` (run from the project
+root; `.tomo/bin/tomo persona trace` also works) and adopt it: read the profile
+— `.tomo/personas/<id>.md` for a built-in, or the resolved file path for a
+custom persona. By default this is the **reviewer** (senior engineer tracing
 architecture and data flow); an override in settings may replace it. Flag
 security concerns for human review.
 
@@ -67,7 +66,7 @@ Any security issues discovered during investigation (if applicable).
 
 ### 4. Hand back
 
-Append one line to `.tomo/log.md` via `.tomo/lib/state.js` `appendLog` when
-present (`trace complete`). Report that findings are complete at
+Append one line to `.tomo/log.md` (`trace complete`): run `tomo log "trace
+complete"` (or `.tomo/bin/tomo log ...`). Report that findings are complete at
 `<output-path>` and hand control back to the caller. This command never writes
 code and does not touch `.tomo/state.json`.

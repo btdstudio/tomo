@@ -7,9 +7,11 @@ Peek at the tail of `.tomo/log.md` for the recent trail.
 
 ## Personas
 
-Load effective settings with `.tomo/lib/settings.js` (when present) and resolve
-each entry in `.tomo/lib/personas.js` `DEFAULT_PERSONA_MAP` with
-`resolvePersona(step, settings)`. Report the binding in one line, e.g.
+Load effective settings with `tomo settings` (or `.tomo/bin/tomo settings`)
+when available, and resolve each step with `tomo persona <step>` for
+`requirements`, `design`, `plan`, `implement`, `implement-review`,
+`implement-security`, `arch`, `trace`, and `debt`. Report the binding in one
+line, e.g.
 `personas: requirements→analyst, design→architect, plan→architect,
 implement→coder, implement-review→reviewer, implement-security→security,
 arch→architect, trace→reviewer, debt→architect`. Mark every step whose persona

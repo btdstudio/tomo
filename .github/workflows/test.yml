@@ -9,22 +9,23 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [20, 22, 24]
+        go-version: ['1.22', '1.24']
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-go@v5
         with:
-          node-version: ${{ matrix.node-version }}
-      - run: npm test
+          go-version: ${{ matrix.go-version }}
+      - run: go test ./...
 
   install-clean:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-go@v5
         with:
-          node-version: 20
-      - run: node scripts/install.js
+          go-version: '1.22'
+      - run: go build -o tomo ./cmd/tomo
+      - run: ./tomo install
       - run: |
           if [ -n "$(git status --porcelain)" ]; then
             echo "install left the tree dirty — a harness install target is not gitignored:"

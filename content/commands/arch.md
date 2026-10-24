@@ -2,11 +2,11 @@
 
 ## Persona
 
-Resolve this step's persona with `.tomo/lib/personas.js` `resolvePersona(
-'arch', settings)` (load effective settings with `.tomo/lib/settings.js` when
-present) and adopt it: read the profile — `.tomo/personas/<id>.md` for a
-built-in, or the resolved file path for a custom persona. By default this is
-the **architect**; an override in settings may replace it.
+Resolve this step's persona with `tomo persona arch` (run from the project
+root; `.tomo/bin/tomo persona arch` also works) and adopt it: read the profile
+— `.tomo/personas/<id>.md` for a built-in, or the resolved file path for a
+custom persona. By default this is the **architect**; an override in settings
+may replace it.
 
 Explore a codebase, surface architectural friction, and design improvements as
 candidate interfaces. A **deep module** (John Ousterhout, "A Philosophy of
@@ -93,14 +93,14 @@ Classify a candidate's dependencies to choose the strategy:
 
 ## File the RFC
 
-Check the effective `issues` mode (load with `.tomo/lib/settings.js`
-`loadSettings` when present; default `github`). Write the agreed design as an
+Check the effective `issues` mode (run `tomo settings`, or `.tomo/bin/tomo
+settings`, when available; default `github`). Write the agreed design as an
 RFC issue:
 
 - `github` (default): file a GitHub issue (`gh issue create`; fall back to the
   web) titled as an arch RFC, with:
-- `local`: create a local issue with `.tomo/lib/issues.js` `writeNewIssue`
-  (title `arch RFC: <name>`, body = the RFC sections below) and report the
+- `local`: create a local issue with `tomo issue new --title "arch RFC: <name>"
+  --body "<RFC body>"` (or `.tomo/bin/tomo issue new ...`) and report the
   created `<issuesDir>/<id>.md` path.
 
 Either way the RFC body carries:

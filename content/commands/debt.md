@@ -2,12 +2,11 @@
 
 ## Persona
 
-Resolve this step's persona with `.tomo/lib/personas.js` `resolvePersona(
-'debt', settings)` (load effective settings with `.tomo/lib/settings.js` when
-present) and adopt it: read the profile — `.tomo/personas/<id>.md` for a
-built-in, or the resolved file path for a custom persona — and run the step as
-that persona. By default this is the **architect**; an override in settings may
-replace it.
+Resolve this step's persona with `tomo persona debt` (run from the project
+root; `.tomo/bin/tomo persona debt` also works) and adopt it: read the profile
+— `.tomo/personas/<id>.md` for a built-in, or the resolved file path for a
+custom persona. By default this is the **architect**; an override in settings
+may replace it.
 
 Assess this repository for technical debt as a principal engineer, write a
 ranked findings report to `debt.md` in the active change folder
@@ -72,20 +71,20 @@ by engineering ROI, not aesthetic preference.
 
 Write the ranked findings to `debt.md` in the active change folder (as above,
 create directories as needed) with the above fields per finding, ordered by
-ROI. Append one line to `.tomo/log.md` via `.tomo/lib/state.js` `appendLog`
-when present (`debt assessment complete`).
+ROI. Append one line to `.tomo/log.md` (`debt assessment complete`): run `tomo
+log "debt assessment complete"` (or `.tomo/bin/tomo log ...`).
 
 ## File the issues
 
 For each qualifying finding, stop and confirm. Then, per effective `issues`
-mode (load with `.tomo/lib/settings.js` `loadSettings` when present; default
-`github`):
+mode (run `tomo settings`, or `.tomo/bin/tomo settings`, when available;
+default `github`):
 
 - `github` (default): create a GitHub issue (`gh issue create`; fall back to
   the web) with the finding's title and full details.
-- `local`: create a local issue with `.tomo/lib/issues.js` `writeNewIssue`
-  (title = finding title, body = full details) and report the created
-  `<issuesDir>/<id>.md` path.
+- `local`: create a local issue with `tomo issue new --title "<finding title>"
+  --body "<full details>"` (or `.tomo/bin/tomo issue new ...`) and report the
+  created `<issuesDir>/<id>.md` path.
 
 Ask before creating each issue; do not batch-file issues the user has not
 seen. This command never writes code and does not touch `.tomo/state.json`.
