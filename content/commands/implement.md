@@ -20,9 +20,10 @@ is missing, stop: `/tomo plan` must run first.
 
 ## Start
 
-If `gates.implement` is empty, follow the `.tomo/state.json` contract (via
-`.tomo/lib/state.js` when present): set the `implement` phase to `in-progress`,
-save state, and append one line to `.tomo/log.md` (`implement → in-progress`).
+If `gates.implement` is empty, set the `implement` phase to `in-progress` (run
+`tomo state set-gate implement in-progress`, or `.tomo/bin/tomo state set-gate
+implement in-progress`; if the binary is unavailable, edit `.tomo/state.json`
+directly) and append one line to `.tomo/log.md` (`implement → in-progress`).
 If it is already `in-progress` (or `complete` is handled above), resume —
 `tasks.json` statuses are the source of truth for what remains.
 
@@ -41,17 +42,16 @@ Iterate the plan in `phases` → `tasks` order until every task is `done`
    `design.md` + the active `src/` seams (existing modules, conventions from
    `AGENTS.md`) to a subagent running the **`coder`** persona — the harness
    agent/subagent named `coder` installed alongside this tool (resolve with
-   `.tomo/lib/personas.js` `resolvePersona('implement', settings)` when
-   present). Verify the subagent touched the named files; if any were missed,
+   `tomo persona implement`, or `.tomo/bin/tomo persona implement`, when
+   available). Verify the subagent touched the named files; if any were missed,
    have it finish the task.
 4. Mark the task `done` in `tasks.json` and persist.
 
 When a phase's tasks are all `done` and the phase does not carry
 `"reviewed": true`:
 
-5. Run the **`reviewer`** persona subagent (resolve with
-   `.tomo/lib/personas.js` `resolvePersona('implement-review', settings)` when
-   present) over that phase's changes
+5. Run the **`reviewer`** persona subagent (resolve with `tomo persona
+   implement-review` when available) over that phase's changes
    (correctness, scope vs. the design, tests). If it raises `critical` or
    `high` findings, reset the affected tasks to `pending` and go back to step 1
    (re-drive). Cap re-review of one phase at 2 cycles, then report to the user
@@ -60,9 +60,8 @@ When a phase's tasks are all `done` and the phase does not carry
 
 When a phase is `reviewed: true` but does not carry `"securityReviewed": true`:
 
-6. Run a dedicated **`security`** persona subagent (resolve with
-   `.tomo/lib/personas.js` `resolvePersona('implement-security', settings)` when
-   present) over that phase's changes —
+6. Run a dedicated **`security`** persona subagent (resolve with `tomo persona
+   implement-security` when available) over that phase's changes —
    vulnerabilities, input handling, authn/authz, secrets, dependency risk. If
    it raises `critical` or `high` findings, reset the affected tasks to
    `pending` and go back to step 1. Cap a phase's security pass at 2 cycles,
@@ -79,12 +78,12 @@ status` shows `implement → in-progress` while running.
 When every task is `done` and every phase carries both `"reviewed": true` and
 `"securityReviewed": true`:
 
-- Run the project's test command — from `package.json` `scripts.test` (fall
-  back to `npm test`). If it fails, stop and report the failure; do NOT mark
-  the spec complete.
-- On success: follow the state contract — set the `implement` phase to
-  `complete`, save state, and append one line to `.tomo/log.md`
-  (`implement complete`).
+- Run the project's test command — the build tool's test script (e.g. `go test
+  ./...` for a Go project, `npm test` for a Node project). If it fails, stop
+  and report the failure; do NOT mark the spec complete.
+- On success: set the `implement` phase to `complete` (run `tomo state
+  set-gate implement complete`, or `.tomo/bin/tomo state set-gate implement
+  complete`) and append one line to `.tomo/log.md` (`implement complete`).
 
 ## Report
 

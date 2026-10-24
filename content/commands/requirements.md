@@ -6,12 +6,12 @@ input to design — do not design anything yet.
 
 ## Persona
 
-Resolve this step's persona with `.tomo/lib/personas.js` `resolvePersona(
-'requirements', settings)` (load effective settings with `.tomo/lib/settings.js`
-when present) and adopt it: read the profile — `.tomo/personas/<id>.md` for a
-built-in, or the resolved file path for a custom persona — and run the step as
-that persona. By default this is the **analyst**, who owns the interview and
-the artifact; an override in settings may replace it.
+Resolve this step's persona with `tomo persona requirements` (run from the
+project root; `.tomo/bin/tomo persona requirements` also works) and adopt it:
+read the profile — `.tomo/personas/<id>.md` for a built-in, or the resolved
+file path for a custom persona — and run the step as that persona. By default
+this is the **analyst**, who owns the interview and the artifact; an override
+in settings may replace it.
 
 ## Resolve the base source
 
@@ -25,8 +25,8 @@ the artifact; an override in settings may replace it.
 - `url:<...>` — fetch the URL
 
 When `$ARGUMENTS` is empty, use `baseSource` from `.tomo/settings.json`
-(load effective settings with `.tomo/lib/settings.js` when that file exists).
-If nothing resolves, stop and ask for a source — never fabricate one.
+(run `tomo settings` to load effective settings when available). If nothing
+resolves, stop and ask for a source — never fabricate one.
 
 ## Clarify
 
@@ -40,14 +40,13 @@ are unambiguous. Note each question and its resolution in the artifact.
 Every piece of work gets its own numbered folder under `.tomo/specs/`. Read
 `.tomo/state.json`. If it has a `change` whose folder still exists, keep it
 (this also covers feedback iterations — never renumber mid-change). Otherwise
-start a new one:
-
-- compute the next id with `.tomo/lib/state.js` `nextChangeId` when present
-  (highest numeric `<id>-` folder prefix under `.tomo/specs/` + 1, else 1)
-- pick a short kebab-case slug for the work (`.tomo/lib/state.js` `slugify`
-  when present)
-- create `.tomo/specs/<id>-<slug>/` and set `change: "<id>-<slug>"` in
-  `.tomo/state.json`
+start a new one with `tomo state start <slug>` (or `.tomo/bin/tomo state start
+<slug>`), which computes the next id, kebab-cases the slug, creates
+`.tomo/specs/<id>-<slug>/`, and sets `change` in `.tomo/state.json`. If the
+binary is unavailable, do it manually: compute the next id (highest numeric
+`<id>-` folder prefix under `.tomo/specs/` + 1, else 1), pick a short
+kebab-case slug, create `.tomo/specs/<id>-<slug>/`, and set
+`change: "<id>-<slug>"` in `.tomo/state.json`.
 
 ## Write the artifact
 
@@ -60,12 +59,15 @@ Record the resolved base sources in the header.
 
 ## Update state
 
-Follow the `.tomo/state.json` contract (via `.tomo/lib/state.js` when present):
+Follow the `.tomo/state.json` contract:
 
 - ensure the `.tomo/` workspace exists
-- start the `requirements` phase and set its gate status to `draft`, save state
-  (including the `change` folder from above)
-- append one line to `.tomo/log.md`: `requirements → draft`
+- start the `requirements` phase and set its gate status to `draft`: run `tomo
+  state set-gate requirements draft` (or `.tomo/bin/tomo state set-gate
+  requirements draft`; if the binary is unavailable, edit `.tomo/state.json`
+  directly) — this also records the `change` folder from above
+- append one line to `.tomo/log.md` (`requirements → draft`): run `tomo log
+  "requirements → draft"` (or `.tomo/bin/tomo log ...`)
 
 Then follow the approval gate below.
 

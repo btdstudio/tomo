@@ -10,10 +10,11 @@ active machine is the `changes[<change>]` record) and `.tomo/log.md` first.
 - Phase status `draft`: the phase command has not presented its gate yet —
   tell the user to re-run that phase's command.
 - Phase status `await-approval`: ask the user to approve or request changes.
-  - **Approve** → set the phase gate status to `approved` (via the
-    `.tomo/state.json` contract, `.tomo/lib/state.js` if present), append one
-    line to `.tomo/log.md` (`<phase> approved`), then tell the user the next
-    phase and its command (requirements → design → plan → implement).
+  - **Approve** → set the phase gate status to `approved` (run `tomo state
+    set-gate <phase> approved`, or `.tomo/bin/tomo state set-gate <phase>
+    approved`; if the binary is unavailable, edit `.tomo/state.json` directly),
+    append one line to `.tomo/log.md` (`<phase> approved`), then tell the user
+    the next phase and its command (requirements → design → plan → implement).
   - **Request changes** → incorporate the feedback into the artifact
     (`.tomo/specs/<change>/requirements.md`, `.tomo/specs/<change>/design.md`,
     or `.tomo/specs/<change>/tasks.json` per phase, in the active change

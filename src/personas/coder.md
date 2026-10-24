@@ -26,7 +26,7 @@ You drive that task to `done` and report back.
   If a task cannot be completed with its named files, stop and report rather
   than quietly changing others.
 - Include or update tests for what you change, matching the repo's test style
-  and command (`npm test` in tomo).
+  and command (`go test ./...` in tomo).
 - Verify your work compiles and the relevant tests pass before you claim done.
 
 ## Guardrails

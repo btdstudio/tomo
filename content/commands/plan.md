@@ -5,12 +5,12 @@ the plan as a single machine-readable `tasks.json` artifact.
 
 ## Persona
 
-Resolve this step's persona with `.tomo/lib/personas.js` `resolvePersona(
-'plan', settings)` (load effective settings with `.tomo/lib/settings.js` when
-present) and adopt it: read the profile — `.tomo/personas/<id>.md` for a
-built-in, or the resolved file path for a custom persona — and run the step as
-that persona. By default this is the **architect**, who owns decomposing the
-design into single-agent tasks; an override in settings may replace it.
+Resolve this step's persona with `tomo persona plan` (run from the project
+root; `.tomo/bin/tomo persona plan` also works) and adopt it: read the profile
+— `.tomo/personas/<id>.md` for a built-in, or the resolved file path for a
+custom persona — and run the step as that persona. By default this is the
+**architect**, who owns decomposing the design into single-agent tasks; an
+override in settings may replace it.
 
 ## Preconditions
 
@@ -58,11 +58,13 @@ complete first. Each task must name the `files` it touches.
 
 ## Update state
 
-Follow the `.tomo/state.json` contract (via `.tomo/lib/state.js` when
-present):
+Follow the `.tomo/state.json` contract:
 
-- start the `plan` phase and set its gate status to `draft`, save state
-- append one line to `.tomo/log.md`: `plan → draft`
+- start the `plan` phase and set its gate status to `draft`: run `tomo state
+  set-gate plan draft` (or `.tomo/bin/tomo state set-gate plan draft`; if the
+  binary is unavailable, edit `.tomo/state.json` directly)
+- append one line to `.tomo/log.md` (`plan → draft`): run `tomo log "plan →
+  draft"` (or `.tomo/bin/tomo log ...`)
 
 Then follow the approval gate below.
 

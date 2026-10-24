@@ -5,13 +5,12 @@ implement anything — it produces the map the plan phase decomposes.
 
 ## Persona
 
-Resolve this step's persona with `.tomo/lib/personas.js` `resolvePersona(
-'design', settings)` (load effective settings with `.tomo/lib/settings.js`
-when present) and adopt it: read the profile — `.tomo/personas/<id>.md` for a
-built-in, or the resolved file path for a custom persona — and run the step as
-that persona. By default this is the **architect**, who owns analysis, the
-design artifact, and resolving open questions; an override in settings may
-replace it.
+Resolve this step's persona with `tomo persona design` (run from the project
+root; `.tomo/bin/tomo persona design` also works) and adopt it: read the
+profile — `.tomo/personas/<id>.md` for a built-in, or the resolved file path
+for a custom persona — and run the step as that persona. By default this is
+the **architect**, who owns analysis, the design artifact, and resolving open
+questions; an override in settings may replace it.
 
 ## Preconditions
 
@@ -48,11 +47,13 @@ Use the same `<change>` folder that holds the requirements.
 
 ## Update state
 
-Follow the `.tomo/state.json` contract (via `.tomo/lib/state.js` when
-present):
+Follow the `.tomo/state.json` contract:
 
-- start the `design` phase and set its gate status to `draft`, save state
-- append one line to `.tomo/log.md`: `design → draft`
+- start the `design` phase and set its gate status to `draft`: run `tomo state
+  set-gate design draft` (or `.tomo/bin/tomo state set-gate design draft`; if
+  the binary is unavailable, edit `.tomo/state.json` directly)
+- append one line to `.tomo/log.md` (`design → draft`): run `tomo log "design →
+  draft"` (or `.tomo/bin/tomo log ...`)
 
 Then follow the approval gate below.
 

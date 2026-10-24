@@ -3,9 +3,10 @@
 Restore the working context from the `.tomo/` workspace after a compact or a
 fresh session.
 
-1. Read `.tomo/state.json` (via `.tomo/lib/state.js` when present) and report:
-   phase, status, per-phase gates (requirements/design/plan gates plus the
-   `implement` run phase), sources, the active change folder (`change`).
+1. Read `.tomo/state.json` (via `tomo state`, or `.tomo/bin/tomo state`, when
+   available; otherwise read the file directly) and report: phase, status,
+   per-phase gates (requirements/design/plan gates plus the `implement` run
+   phase), sources, the active change folder (`change`).
 2. Read `.tomo/SLIP.md` if present and report its summary: objective, key
    decisions, open questions.
 3. Read the headers of the newest artifacts in the active change folder

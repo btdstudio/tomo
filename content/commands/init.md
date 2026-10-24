@@ -10,19 +10,19 @@ project's settings explicitly and lay down the directories every command expects
 1. If the `.tomo/` workspace does not exist, create it along with the artifact
    directory (`mkdir -p .tomo/specs`).
 2. Compute effective settings (defaults ← global `~/.config/tomo/settings.json`
-   ← project `.tomo/settings.json`). Use `.tomo/lib/settings.js`
-   (`loadSettings`) when that file exists; otherwise read the two JSON files
+   ← project `.tomo/settings.json`). Run `tomo settings` (or `.tomo/bin/tomo
+   settings`) when the binary is available; otherwise read the two JSON files
    directly (missing files count as `{}`) and merge: start from the defaults,
    overlay global, then project. The effective `gates` must be `block|prompt|
    auto`; if it is not, report the invalid value and still proceed with `block`.
 3. If `.tomo/settings.json` does not exist, write it with the effective
-   settings keys as explicit JSON — from `.tomo/lib/settings.js`
-   `defaultSettings()` when that file exists (otherwise the same defaults:
-   `baseSource`, `gates`, `provider`, `artifactDir`, `issues`, `issuesDir`,
-   `personas`) — so the project file always reflects its own configuration. If
-   it already exists, leave it untouched.
-4. Append one line to `.tomo/log.md` (via `.tomo/lib/state.js` `appendLog` when
-   present): `workspace initialized (init)`.
+   settings keys as explicit JSON — the defaults are `baseSource`, `gates`,
+   `provider`, `artifactDir`, `issues`, `issuesDir`, `personas` — so the
+   project file always reflects its own configuration. If it already exists,
+   leave it untouched.
+4. Append one line to `.tomo/log.md`: run `tomo log "workspace initialized
+   (init)"` (or `.tomo/bin/tomo log ...`; if the binary is unavailable, append
+   `- <ISO timestamp> workspace initialized (init)` directly).
 5. Report the paths created and the effective settings, then suggest starting
    with `/tomo requirements [src]`.
 

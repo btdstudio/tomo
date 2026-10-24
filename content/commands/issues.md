@@ -1,8 +1,8 @@
 # Tomo issues
 
 Manage this project's issues. The backend comes from the effective settings
-(load with `.tomo/lib/settings.js` `loadSettings` when present, otherwise read
-`~/.config/tomo/settings.json` and `.tomo/settings.json` directly, missing
+(run `tomo settings`, or `.tomo/bin/tomo settings`, when available; otherwise
+read `~/.config/tomo/settings.json` and `.tomo/settings.json` directly, missing
 files count as `{}`, project overlays global):
 
 - `issues` — `github` (default; everything routes through the `gh` CLI) or
@@ -15,15 +15,17 @@ Verbs (`$ARGUMENTS`):
 - `new [--title <title>] [--labels <a,b>] [body]` — create an issue.
   - `github`: run `gh issue create --title "<title>" --body "<body>"` (add
     `--label <a> --label <b>` for each label). Print gh's output.
-  - `local`: use `.tomo/lib/issues.js` `writeNewIssue`. Print the created
+  - `local`: run `tomo issue new --title "<title>" --labels <a,b> --body
+    "<body>"` (or `.tomo/bin/tomo issue new ...`). Print the created
     `<issuesDir>/<id>.md` path and `#<id>`.
 - `list [--status open|closed]` — list issues.
   - `github`: run `gh issue list [--state open|closed]`.
-  - `local`: use `.tomo/lib/issues.js` `listIssues`; print `#<id> [open|closed] <title>` per issue,
-    open only by default, id order.
+  - `local`: run `tomo issue list` (or `.tomo/bin/tomo issue list`); print
+    `#<id> [open|closed] <title>` per issue, open only by default, id order.
 - `show <id>` — full detail for one issue.
   - `github`: run `gh issue view <id>`.
-  - `local`: use `.tomo/lib/issues.js` `readIssue` (or print the raw file); show frontmatter + body.
+  - `local`: run `tomo issue show <id>` (or print the raw file); show
+    frontmatter + body.
 
 ## Local store rules
 
