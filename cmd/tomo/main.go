@@ -30,7 +30,7 @@ func run(args []string) int {
 	}
 	switch args[0] {
 	case "version", "--version", "-v":
-		fmt.Printf("tomo version v%s\n", version.Version)
+		fmt.Printf("tomo version %s\n", version.String())
 		return 0
 	case "install":
 		return runInstall(args[1:])
