@@ -97,28 +97,34 @@ content/commands/   canonical command bodies (edit these)
 content/gate.md     shared approval-gate contract
 src/commands/       command contracts: YAML frontmatter only
 src/personas/       canonical persona profiles (edit these)
-src/templates/      artifact skeletons (requirements, design, tasks)
-src/lib/            shared state/settings/personas/providers logic
-adapters/common/    gitignored generated cache (never commit or hand-edit)
-scripts/            render.js + install.js
-tests/              node --test; consistency, render, and placement tests
+src/templates/      artifact skeletons (requirements, design)
+embed.go            embeds content/ + src/ into the binary (go:embed)
+cmd/tomo/           the `tomo` binary CLI (install, render, runtime helpers)
+internal/           ported logic: state, settings, issues, personas,
+                    providers, render, install, hook, cli
+adapters/claude/    Claude Code plugin (hooks, persona casts)
+testdata/golden/    byte-identity fixtures captured from the renderer
 ```
 
 ## Installing
 
-Tomo is a source-style install: keep this repo checked out anywhere (e.g.
-`~/source/tomo`), then run its `install.js` from wherever you want the commands
-to appear.
+Tomo ships as a single self-contained binary — the canonical prompts are
+embedded at build time, so no source checkout or Node.js is needed at runtime.
+
+```sh
+git clone https://github.com/btdstudio/tomo ~/source/tomo
+cd ~/source/tomo && go build -o tomo ./cmd/tomo   # once (or: go install ./cmd/tomo)
+```
 
 ### Per-project (`--project`, default cwd)
 
 ```sh
-node ~/source/tomo/scripts/install.js            # into the current project
-node ~/source/tomo/scripts/install.js --project path/to/mypkg
+~/source/tomo/tomo install                          # into the current project
+~/source/tomo/tomo install --project path/to/mypkg
 ```
 
-Renders the wrappers and persona casts into the gitignored `adapters/common/`
-cache, then copies them into the project and seeds its `.tomo/` workspace. The
+Renders the wrappers and persona casts in-memory from the embedded content
+store, then writes them into the project and seeds its `.tomo/` workspace. The
 harness-side dirs (`.opencode/`, `.claude/`, `.agents/`, `.codex/agents/`, plus
 Copilot's `.github/skills/tomo-*` and `.github/agents/*.agent.md`) are created
 only for the harness(es) you pick and are generated output — gitignored, never
@@ -128,7 +134,7 @@ On an interactive terminal the installer asks which harness(es) you use
 (`all | opencode | claude | copilot | antigravity | codex`, default `all`);
 `--provider opencode[,claude]` (or `--provider all`) skips the prompt, and a
 non-interactive run defaults to `all`. New harnesses are one entry in
-`src/lib/providers.js`.
+`internal/providers`.
 
 Re-run any time to refresh — projects seeded before the implement phase or
 before personas existed need a re-run to pick up new state vocabulary and
@@ -137,26 +143,29 @@ persona files.
 ### Global (`--global`)
 
 ```sh
-node ~/source/tomo/scripts/install.js --global
+~/source/tomo/tomo install --global
 ```
 
-Symlinks the command wrappers and persona casts into your user-level harness
-dirs, so every project and session has the `/tomo` commands and persona
+Writes the command wrappers and persona casts (as copies) into your user-level
+harness dirs, so every project and session has the `/tomo` commands and persona
 subagents. A global install also pre-approves reads of the tomo config dir
 (`~/.config/tomo/settings.json`) for each harness, merge-aware and idempotent.
 
-Because these symlinks point **into this checkout**, keep the clone where you
-installed it (like a dotfiles repo); edit a canonical body or contract and
-re-run `node scripts/install.js --global` to refresh. `.tomo/` is per-project,
-so a fresh project gets its workspace seeded the first time a phase runs.
+The binary is self-contained: after building it you can move or distribute it
+anywhere — installs no longer depend on the checkout. To update, rebuild and
+re-run `tomo install --global`. `.tomo/` is per-project, so a fresh project gets
+its workspace seeded the first time a phase runs.
 
-Run `node scripts/install.js --help` for a recap with the resolved paths.
-`npm run install` (inside this checkout) is the per-project form targeting the
+Run `tomo install --help` for a recap with the resolved paths.
+`./tomo install` (inside this checkout) is the per-project form targeting the
 tomo repo itself.
 
 ## Development
 
-- `npm run install` — render + place into the current project
-- `npm test` — content-store consistency + render + shape + placement tests
+- `go build -o tomo ./cmd/tomo` — build the binary
+- `./tomo install` — render + place into the current project
+- `go test ./...` — content-store consistency + render + shape + placement tests
+- `./tomo step requirements` — composed, context-injected prompt (with `--print`
+  for the raw body)
 
-Runtime: Node >= 20, standard library only, no third-party dependencies.
+Runtime: Go >= 1.22, standard library only, no third-party dependencies.
