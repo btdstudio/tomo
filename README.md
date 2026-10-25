@@ -112,15 +112,14 @@ Tomo ships as a single self-contained binary — the canonical prompts are
 embedded at build time, so no source checkout or Node.js is needed at runtime.
 
 ```sh
-git clone https://github.com/btdstudio/tomo ~/source/tomo
-cd ~/source/tomo && go build -o tomo ./cmd/tomo   # once (or: go install ./cmd/tomo)
+go install github.com/btdstudio/tomo/cmd/tomo@latest
+tomo install --global
 ```
 
 ### Per-project (`--project`, default cwd)
 
 ```sh
-~/source/tomo/tomo install                          # into the current project
-~/source/tomo/tomo install --project path/to/mypkg
+tomo install --project path/to/mypkg   # into the current project
 ```
 
 Renders the wrappers and persona casts in-memory from the embedded content
@@ -143,7 +142,7 @@ persona files.
 ### Global (`--global`)
 
 ```sh
-~/source/tomo/tomo install --global
+tomo install --global
 ```
 
 Writes the command wrappers and persona casts (as copies) into your user-level
