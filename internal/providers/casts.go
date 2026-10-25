@@ -224,3 +224,34 @@ func CastCopilotCommand(cmd Command) string {
 	})
 	return buf.String()
 }
+
+type piData struct {
+	Name        string
+	Description string
+	Tools       string
+	Body        string
+}
+
+var piTmpl = template.Must(template.New("pi").Parse(`---
+name: {{.Name}}
+description: {{.Description}}{{if .Tools}}
+tools: {{.Tools}}{{end}}
+---
+
+{{.Body}}
+`))
+
+func CastPi(p Persona) string {
+	tools := ""
+	if READONLY_PERSONAS[p.Name] {
+		tools = "read, grep, find, ls"
+	}
+	var buf bytes.Buffer
+	_ = piTmpl.Execute(&buf, piData{
+		Name:        p.Name,
+		Description: p.FM.Description,
+		Tools:       tools,
+		Body:        p.Body,
+	})
+	return buf.String()
+}

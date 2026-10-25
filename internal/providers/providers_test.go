@@ -8,8 +8,8 @@ import (
 	"testing"
 )
 
-func TestRegistryExposesFiveProviders(t *testing.T) {
-	if !reflect.DeepEqual(ProviderIds(), []string{"opencode", "claude", "copilot", "antigravity", "codex"}) {
+func TestRegistryExposesSixProviders(t *testing.T) {
+	if !reflect.DeepEqual(ProviderIds(), []string{"opencode", "claude", "copilot", "antigravity", "codex", "pi"}) {
 		t.Fatalf("provider ids = %v", ProviderIds())
 	}
 	for _, id := range ProviderIds() {
@@ -83,7 +83,7 @@ func assertSuffix(t *testing.T, got, suffix string) {
 }
 
 func TestParseProviderSpec(t *testing.T) {
-	all := []string{"opencode", "claude", "copilot", "antigravity", "codex"}
+	all := []string{"opencode", "claude", "copilot", "antigravity", "codex", "pi"}
 	cases := map[string][]string{
 		"":                 all,
 		"all":              all,

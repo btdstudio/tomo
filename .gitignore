@@ -10,6 +10,7 @@
 # tomo-owned; .codex/ and .github/ share space with hand-authored config, so
 # only tomo's subpaths are ignored there.
 .opencode/
+.pi/
 .claude/
 .agents/
 .codex/agents/

@@ -189,10 +189,25 @@ var PROVIDERS = map[string]*Provider{
 		CommandCast:     CastAntigravityCommand,
 		Cast:            CastCodex,
 	},
+	"pi": {
+		ID:    "pi",
+		Label: "Pi",
+		ProjectCommandDir: func(project string) string {
+			return filepath.Join(project, ".pi", "prompts")
+		},
+		GlobalCommandDir: func() string { return filepath.Join(homeDir(), ".pi", "agent", "prompts") },
+		ProjectAgentDir: func(project string) string {
+			return filepath.Join(project, ".pi", "agents")
+		},
+		GlobalAgentDir: func() string { return filepath.Join(homeDir(), ".pi", "agent", "agents") },
+		CommandFilename: func(name string) string { return "tomo-" + name + ".md" },
+		Filename:        func(name string) string { return name + ".md" },
+		Cast:            CastPi,
+	},
 }
 
 // ProviderOrder is the stable provider id order (Go map iteration is random).
-var ProviderOrder = []string{"opencode", "claude", "copilot", "antigravity", "codex"}
+var ProviderOrder = []string{"opencode", "claude", "copilot", "antigravity", "codex", "pi"}
 
 func ProviderIds() []string {
 	return append([]string{}, ProviderOrder...)
