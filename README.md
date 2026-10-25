@@ -24,11 +24,11 @@ files on disk (`.tomo/`), not in the harness.
 ## Commands
 
 All eighteen commands are available in every supported harness (opencode, Claude
-Code, GitHub Copilot CLI, Antigravity CLI, OpenAI Codex). Copilot and
+Code, GitHub Copilot CLI, Antigravity CLI, OpenAI Codex, Pi). Copilot and
 Antigravity ship them as Skills prompted as `/tomo-<command>`; Codex ships them
 as Skills the model loads by name. Invoke by harness:
 
-- **opencode, Copilot, Antigravity:** `/tomo-<command>` (e.g. `/tomo-status`)
+- **opencode, Copilot, Antigravity, Pi:** `/tomo-<command>` (e.g. `/tomo-status`)
 - **Claude Code:** `/tomo <command>` (e.g. `/tomo status`)
 - **Codex:** skill by name (e.g. `tomo status`)
 
@@ -130,13 +130,14 @@ tomo install --project path/to/mypkg   # into the current project
 
 Renders the wrappers and persona casts in-memory from the embedded content
 store, then writes them into the project and seeds its `.tomo/` workspace. The
-harness-side dirs (`.opencode/`, `.claude/`, `.agents/`, `.codex/agents/`, plus
-Copilot's `.github/skills/tomo-*` and `.github/agents/*.agent.md`) are created
+harness-side dirs (`.opencode/`, `.claude/`, `.agents/`, `.codex/agents/`,
+`.pi/prompts/`, plus Copilot's `.github/skills/tomo-*` and
+`.github/agents/*.agent.md`) are created
 only for the harness(es) you pick and are generated output — gitignored, never
 committed; `.tomo/` always ships.
 
 On an interactive terminal the installer asks which harness(es) you use
-(`all | opencode | claude | copilot | antigravity | codex`, default `all`);
+(`all | opencode | claude | copilot | antigravity | codex | pi`, default `all`);
 `--provider opencode[,claude]` (or `--provider all`) skips the prompt, and a
 non-interactive run defaults to `all`. New harnesses are one entry in
 `internal/providers`.
