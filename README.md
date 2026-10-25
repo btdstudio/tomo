@@ -109,7 +109,7 @@ testdata/golden/    byte-identity fixtures captured from the renderer
 ## Installing
 
 Tomo ships as a single self-contained binary — the canonical prompts are
-embedded at build time, so no source checkout or Node.js is needed at runtime.
+embedded at build time, so no source checkout is needed at runtime.
 
 ```sh
 go install github.com/btdstudio/tomo/cmd/tomo@latest
