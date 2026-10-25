@@ -23,34 +23,40 @@ files on disk (`.tomo/`), not in the harness.
 
 ## Commands
 
-| Phase / command | opencode | Claude Code | Antigravity CLI | gate | args |
-|---|---|---|---|---|---|
-| help | `/tomo-help` | `/tomo help` | `/tomo-help` | none | |
-| status | `/tomo-status` | `/tomo status` | `/tomo-status` | none | |
-| settings | `/tomo-settings` | `/tomo settings` | `/tomo-settings` | none | |
-| init | `/tomo-init` | `/tomo init` | `/tomo-init` | none | |
-| requirements | `/tomo-requirements` | `/tomo requirements` | `/tomo-requirements` | block | `$ARGUMENTS` → source |
-| design | `/tomo-design` | `/tomo design` | `/tomo-design` | block | |
-| plan | `/tomo-plan` | `/tomo plan` | `/tomo-plan` | block | |
-| continue | `/tomo-continue` | `/tomo continue` | `/tomo-continue` | none | `$ARGUMENTS` → source |
-| implement | `/tomo-implement` | `/tomo implement` | `/tomo-implement` | none | |
-| handoff | `/tomo-handoff` | `/tomo handoff` | `/tomo-handoff` | none | |
-| pickup | `/tomo-pickup` | `/tomo pickup` | `/tomo-pickup` | none | |
-| switch | `/tomo-switch` | `/tomo switch` | `/tomo-switch` | none | `$ARGUMENTS` → change |
-| issues | `/tomo-issues` | `/tomo issues` | `/tomo-issues` | none | `$ARGUMENTS` → verb |
-| commit | `/tomo-commit` | `/tomo commit` | `/tomo-commit` | none | |
-| pr | `/tomo-pr` | `/tomo pr` | `/tomo-pr` | none | `$ARGUMENTS` → title |
-| arch | `/tomo-arch` | `/tomo arch` | `/tomo-arch` | none | |
-| trace | `/tomo-trace` | `/tomo trace` | `/tomo-trace` | none | `$ARGUMENTS` → problem + output path |
-| debt | `/tomo-debt` | `/tomo debt` | `/tomo-debt` | none | `$ARGUMENTS` → focus + severity |
+All eighteen commands are available in every supported harness (opencode, Claude
+Code, GitHub Copilot CLI, Antigravity CLI, OpenAI Codex). Copilot and
+Antigravity ship them as Skills prompted as `/tomo-<command>`; Codex ships them
+as Skills the model loads by name. Invoke by harness:
 
-All eighteen commands are live in opencode, Claude Code, GitHub Copilot CLI,
-Antigravity CLI, and OpenAI Codex. Copilot and Antigravity ship commands as
-Skills prompted as `/tomo-<command>`; Codex ships them as Skills the model
-loads by name. Approved gates (`requirements → design → plan`) persist in
-`.tomo/state.json`, so your place survives across harnesses, sessions, and
-tools. Each spec keeps its own phase machine, so `/tomo switch` pauses one work
-stream and resumes another.
+- **opencode, Copilot, Antigravity:** `/tomo-<command>` (e.g. `/tomo-status`)
+- **Claude Code:** `/tomo <command>` (e.g. `/tomo status`)
+- **Codex:** skill by name (e.g. `tomo status`)
+
+| Command | Gate | Args |
+|---|---|---|
+| `help` | none | |
+| `status` | none | |
+| `settings` | none | |
+| `init` | none | |
+| `requirements` | block | `$ARGUMENTS` → source |
+| `design` | block | |
+| `plan` | block | |
+| `continue` | none | `$ARGUMENTS` → source |
+| `implement` | none | |
+| `handoff` | none | |
+| `pickup` | none | |
+| `switch` | none | `$ARGUMENTS` → change |
+| `issues` | none | `$ARGUMENTS` → verb |
+| `commit` | none | |
+| `pr` | none | `$ARGUMENTS` → title |
+| `arch` | none | |
+| `trace` | none | `$ARGUMENTS` → problem + output path |
+| `debt` | none | `$ARGUMENTS` → focus + severity |
+
+Approved gates (`requirements → design → plan`) persist in `.tomo/state.json`,
+so your place survives across harnesses, sessions, and tools. Each spec keeps
+its own phase machine, so `/tomo switch` pauses one work stream and resumes
+another.
 
 ## Personas
 
