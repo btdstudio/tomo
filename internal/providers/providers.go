@@ -199,7 +199,7 @@ var PROVIDERS = map[string]*Provider{
 		ProjectAgentDir: func(project string) string {
 			return filepath.Join(project, ".pi", "agents")
 		},
-		GlobalAgentDir: func() string { return filepath.Join(homeDir(), ".pi", "agent", "agents") },
+		GlobalAgentDir:  func() string { return filepath.Join(homeDir(), ".pi", "agent", "agents") },
 		CommandFilename: func(name string) string { return "tomo-" + name + ".md" },
 		Filename:        func(name string) string { return name + ".md" },
 		Cast:            CastPi,
