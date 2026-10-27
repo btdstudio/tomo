@@ -1,0 +1,5 @@
+# Per-project workspace state (regenerable, not committed)
+.tomo/
+
+# OS noise
+.DS_Store

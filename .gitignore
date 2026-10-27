@@ -1,0 +1,9 @@
+# Per-project workspace state (never committed)
+/.tomo/
+
+# OS noise
+.DS_Store
+
+# Built binary
+/tomo
+/tomo.exe
