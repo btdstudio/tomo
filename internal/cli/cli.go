@@ -51,7 +51,7 @@ func PrintUsage() {
 Usage:
   tomo init [dir] [--no-git] [--force]   scaffold the ICM structure
   tomo update                             refresh managed files
-  tomo add kumi|hachigo <name>            install an app into src/apps/<name>/
+  tomo add kumi|hachigo <name> [module]   scaffold an app into src/apps/<name>/
   tomo status                             show the active change
   tomo settings                           show effective settings
   tomo switch <change>                    switch the active change

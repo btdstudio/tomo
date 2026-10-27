@@ -25,8 +25,8 @@ tomo, which folds test authoring into the coder and adequacy into the reviewer.
 |---|---|
 | `tomo init [dir]` | scaffold this ICM structure |
 | `tomo update` | refresh managed files to the installed version |
-| `tomo add kumi <name>` | install a kumi Go app into `src/apps/<name>/` |
-| `tomo add hachigo <name>` | install a hachigo site into `src/apps/<name>/` |
+| `tomo add kumi <name> [module-path]` | scaffold a kumi Go+HTMX app into `src/apps/<name>/` |
+| `tomo add hachigo <name>` | scaffold a hachigo site into `src/apps/<name>/` |
 | `tomo status` | show the active change's phase/status |
 | `tomo settings` | show/merge settings |
 | `tomo switch <change>` | switch the active change |
