@@ -41,7 +41,7 @@ func Add(dir, appType, name string, extraArgs ...string) (AddReport, error) {
 		return rep, fmt.Errorf("tomo add: unknown app type %q", appType)
 	}
 
-	bin, err := goInstall(installPath)
+	bin, err := GoInstall(installPath)
 	if err != nil {
 		return rep, fmt.Errorf("tomo add: install %s: %w", installPath, err)
 	}
@@ -60,17 +60,9 @@ func Add(dir, appType, name string, extraArgs ...string) (AddReport, error) {
 	return rep, nil
 }
 
-// goInstall installs a Go tool (import path, e.g.
-// github.com/btdstudio/kumi/cmd/kumi) via `go install …@latest` and returns
-// the path to the installed binary.
-func goInstall(importPath string) (string, error) {
-	full := importPath
-	if !strings.Contains(importPath, "@") {
-		full += "@latest"
-	}
-	if err := runCmd("", "go", "install", full); err != nil {
-		return "", err
-	}
+// GoToolBin returns the GOPATH/bin path for a tool import path (e.g.
+// github.com/btdstudio/kumi/cmd/kumi -> <GOPATH>/bin/kumi).
+func GoToolBin(importPath string) (string, error) {
 	out, err := exec.Command("go", "env", "GOPATH").Output()
 	if err != nil {
 		return "", err
@@ -84,6 +76,19 @@ func goInstall(importPath string) (string, error) {
 		base = base[:i]
 	}
 	return filepath.Join(gopath, "bin", filepath.Base(base)), nil
+}
+
+// GoInstall installs a Go tool (import path) via `go install …@latest` and
+// returns the path to the installed binary.
+func GoInstall(importPath string) (string, error) {
+	full := importPath
+	if !strings.Contains(importPath, "@") {
+		full += "@latest"
+	}
+	if err := runCmd("", "go", "install", full); err != nil {
+		return "", err
+	}
+	return GoToolBin(importPath)
 }
 
 // runCmd runs a command in dir, streaming its output.
