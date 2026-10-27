@@ -31,6 +31,8 @@ tomo, which folds test authoring into the coder and adequacy into the reviewer.
 | `tomo settings` | show/merge settings |
 | `tomo switch <change>` | switch the active change |
 | `tomo issues new|list|show` | manage `00_issues/` |
+| `tomo doctor [--install]` | check toolchain prerequisites |
+| `tomo list` | list installed tools + versions |
 | `tomo commit` | propose conventional micro-commits |
 | `tomo pr [title]` | open a pull request |
 | `tomo help` | usage |

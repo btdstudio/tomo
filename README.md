@@ -31,6 +31,8 @@ go install github.com/btdstudio/tomo/cmd/tomo@latest
 | `tomo settings` | show/merge settings |
 | `tomo switch <change>` | switch the active change |
 | `tomo issues new\|list\|show` | manage `00_issues/` |
+| `tomo doctor [--install]` | check toolchain prerequisites |
+| `tomo list` | list installed tools + versions |
 | `tomo commit` | stage all + commit (conventional) |
 | `tomo pr [title]` | open a pull request via `gh` |
 | `tomo help` | usage |
