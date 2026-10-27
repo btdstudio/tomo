@@ -1,7 +1,6 @@
 {
   "version": "dev",
   "files": {
-    ".DS_Store": "3af168004807a564074be3fc140b6334b8c21b5c62b908a98f9860001732b168",
     ".gitignore": "71b06475c79021f6cb84b6e1f86b126669094f2fb0b61e259bcb618801226554",
     "00_issues/.gitkeep": "d0f47ef5e268bb420f15a230cfa081b246409db622e47f155599d296aff120f7",
     "01_planning/context.md": "716e98d586a729a1820f5823b1ed0da9bd8cfc63df723031a0178275e710b909",

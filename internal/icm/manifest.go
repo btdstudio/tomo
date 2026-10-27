@@ -35,6 +35,11 @@ func walkScaffold(fn func(rel string, data []byte) error) error {
 		if d.IsDir() {
 			return nil
 		}
+		// Skip OS junk (macOS .DS_Store) so the embedded scaffold and its
+		// manifest are deterministic regardless of the build machine.
+		if d.Name() == ".DS_Store" {
+			return nil
+		}
 		data, err := fs.ReadFile(tomo.ScaffoldFS, p)
 		if err != nil {
 			return err
