@@ -1,9 +1,7 @@
 // Package settings owns Tomo's mergeable settings: global
 // (~/.config/tomo/settings.json) then project (.tomo/settings.json); the
 // project supersedes the global. Effective settings = defaults ← global ←
-// project. There is no per-harness config — one contract drives every harness.
-//
-// This is a faithful port of src/lib/settings.js.
+// project.
 package settings
 
 import (
@@ -16,59 +14,27 @@ import (
 )
 
 var VALID_GATES = []string{"block", "prompt", "auto"}
-var VALID_ISSUES = []string{"github", "local"}
+var VALID_ISSUES = []string{"local"}
 
-// Personas holds the step→persona overrides (map) and alias→file custom map.
-type Personas struct {
-	Map    map[string]string `json:"map"`
-	Custom map[string]string `json:"custom"`
-}
-
-// Settings is the effective settings shape. Field order matches the JS
-// defaultSettings() insertion order for stable JSON.
+// Settings is the effective settings shape.
 type Settings struct {
-	BaseSource  string   `json:"baseSource"`
-	Gates       string   `json:"gates"`
-	Provider    string   `json:"provider"`
-	ArtifactDir string   `json:"artifactDir"`
-	Issues      string   `json:"issues"`
-	IssuesDir   string   `json:"issuesDir"`
-	Personas    Personas `json:"personas"`
+	BaseSource  string            `json:"baseSource"`
+	Gates       string            `json:"gates"`
+	ArtifactDir string            `json:"artifactDir"`
+	Issues      string            `json:"issues"`
+	IssuesDir   string            `json:"issuesDir"`
+	AppSources  map[string]string `json:"appSources"`
 }
 
 func DefaultSettings() Settings {
 	return Settings{
 		BaseSource:  "", // default base requirement source: file | "issue:N" | "url:..."
 		Gates:       "block",
-		Provider:    "", // optional harness tag (opencode, claude, ...)
-		ArtifactDir: ".tomo/specs",
-		Issues:      "github",
-		IssuesDir:   "issues",
-		Personas:    Personas{Map: map[string]string{}, Custom: map[string]string{}},
+		ArtifactDir: "01_planning/specs",
+		Issues:      "local",
+		IssuesDir:   "00_issues",
+		AppSources:  map[string]string{"kumi": "github.com/btdstudio/kumi", "hachigo": "github.com/btdstudio/hachigo"},
 	}
-}
-
-func emptyPersonas() Personas {
-	return Personas{Map: map[string]string{}, Custom: map[string]string{}}
-}
-
-// mergePersonas merges key-wise (per step, per alias) so a project can override
-// one step while inheriting the global map. Other settings stay shallow.
-func mergePersonas(base, next Personas) Personas {
-	out := emptyPersonas()
-	for k, v := range base.Map {
-		out.Map[k] = v
-	}
-	for k, v := range next.Map {
-		out.Map[k] = v
-	}
-	for k, v := range base.Custom {
-		out.Custom[k] = v
-	}
-	for k, v := range next.Custom {
-		out.Custom[k] = v
-	}
-	return out
 }
 
 func GlobalSettingsPath() string {
@@ -123,8 +89,6 @@ func stringField(s *Settings, key, val string) {
 		s.BaseSource = val
 	case "gates":
 		s.Gates = val
-	case "provider":
-		s.Provider = val
 	case "artifactDir":
 		s.ArtifactDir = val
 	case "issues":
@@ -144,8 +108,8 @@ func MergeSettings(layers ...map[string]any) (Settings, error) {
 			if value == nil {
 				continue
 			}
-			if key == "personas" {
-				out.Personas = mergePersonas(out.Personas, personasFromRaw(value))
+			if key == "appSources" {
+				out.AppSources = mergeStringMap(out.AppSources, appSourcesFromRaw(value))
 				continue
 			}
 			if s, ok := value.(string); ok {
@@ -157,8 +121,8 @@ func MergeSettings(layers ...map[string]any) (Settings, error) {
 		return Settings{}, fmt.Errorf("tomo: invalid gates %q (expected %s)", out.Gates, join(VALID_GATES, "|"))
 	}
 	if !contains(VALID_ISSUES, out.Issues) {
-		fmt.Fprintf(os.Stderr, "tomo: invalid issues %q (expected %s); using \"github\"\n", out.Issues, join(VALID_ISSUES, "|"))
-		out.Issues = "github"
+		fmt.Fprintf(os.Stderr, "tomo: invalid issues %q (expected %s); using \"local\"\n", out.Issues, join(VALID_ISSUES, "|"))
+		out.Issues = "local"
 	}
 	return out, nil
 }
@@ -174,27 +138,29 @@ func join(list []string, sep string) string {
 	return s
 }
 
-func personasFromRaw(v any) Personas {
-	p := emptyPersonas()
+func mergeStringMap(base, next map[string]string) map[string]string {
+	out := map[string]string{}
+	for k, v := range base {
+		out[k] = v
+	}
+	for k, v := range next {
+		out[k] = v
+	}
+	return out
+}
+
+func appSourcesFromRaw(v any) map[string]string {
+	out := map[string]string{}
 	m, ok := v.(map[string]any)
 	if !ok {
-		return p
+		return out
 	}
-	if mm, ok := m["map"].(map[string]any); ok {
-		for k, vv := range mm {
-			if s, ok := vv.(string); ok {
-				p.Map[k] = s
-			}
+	for k, vv := range m {
+		if s, ok := vv.(string); ok {
+			out[k] = s
 		}
 	}
-	if cm, ok := m["custom"].(map[string]any); ok {
-		for k, vv := range cm {
-			if s, ok := vv.(string); ok {
-				p.Custom[k] = s
-			}
-		}
-	}
-	return p
+	return out
 }
 
 // Loaded is the result of LoadSettings.

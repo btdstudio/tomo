@@ -17,7 +17,7 @@ jobs:
           go-version: ${{ matrix.go-version }}
       - run: go test ./...
 
-  install-clean:
+  smoke:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,10 +25,12 @@ jobs:
         with:
           go-version: '1.22'
       - run: go build -o tomo ./cmd/tomo
-      - run: ./tomo install
+      - run: ./tomo check
+      - run: ./tomo init /tmp/tomo-smoke --no-git
+      - run: test -f /tmp/tomo-smoke/AGENTS.md && test -f /tmp/tomo-smoke/.tomo/settings.json
       - run: |
           if [ -n "$(git status --porcelain)" ]; then
-            echo "install left the tree dirty — a harness install target is not gitignored:"
+            echo "build left the tree dirty — a generated file is not gitignored:"
             git status --porcelain
             exit 1
           fi

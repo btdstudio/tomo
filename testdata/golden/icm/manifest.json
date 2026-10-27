@@ -1,0 +1,25 @@
+{
+  "version": "dev",
+  "files": {
+    ".gitignore": "71b06475c79021f6cb84b6e1f86b126669094f2fb0b61e259bcb618801226554",
+    "00_issues/.gitkeep": "d0f47ef5e268bb420f15a230cfa081b246409db622e47f155599d296aff120f7",
+    "01_planning/context.md": "716e98d586a729a1820f5823b1ed0da9bd8cfc63df723031a0178275e710b909",
+    "01_planning/personas/analyst.md": "2a481fba9848eec05c6a8d8e449b4a40d16dcd34aae2308f4726a69b16104508",
+    "01_planning/personas/architect.md": "93cd0c7bfd6241226de2374b82b4eaa633b2e59268338ef820eb9e496474b699",
+    "01_planning/specs/.gitkeep": "8370c25222ccab5f5b696fad3e3d990267915b4adce2d4dfaf3880d8b57a5656",
+    "01_planning/templates/design.md": "b872fae7fabd6ac433293287480081f639eb6e34190a10a88a31927d304629eb",
+    "01_planning/templates/requirements.md": "122625c472f6ad48a379f9775f549e66a7f7f0ce1a3669b09e4ade002afc0b7e",
+    "02_implementation/context.md": "3b176ce507e3be5122be7ac5ae0d97d0e60b3da6bac8be26b4d73ee83dc362bf",
+    "02_implementation/personas/coder.md": "20cf158b8465cb188c68bbc9f95ebe64317b7fefa91dd6e5a96819896686d6f9",
+    "03_testing/context.md": "fadae5a092f261dcf9c59e5f7e44aac8e76879eb9e77834e37bbd3f1663c59b5",
+    "03_testing/personas/qa.md": "863b8441615b0e85b69393ca7abc1ceb3000a66ae1a9894887bf8695a04bea42",
+    "03_testing/reports/.gitkeep": "801b5bfa548c739a4dd144ac8848bbb81ec3da9d1cfd6509fafd4a01832b961d",
+    "04_refactoring/context.md": "921514521a3020aafe196ec958fd646a94e66d7c2176319de48c9d2467cc1ec6",
+    "04_refactoring/personas/reviewer.md": "ffb96fd1fa5baef70a2c17f531b909aca983732c8ba482a770628ff9f2f85ad7",
+    "04_refactoring/personas/security.md": "a256fa50b211a592a87baf1c949a8ed7a8444f28c7fc37cb595ffeb9e07b0eee",
+    "04_refactoring/reviews/.gitkeep": "790adf5783174ecfbec10f4a852c99f75bdf1925a077b19137f3784e5b3d4724",
+    "AGENTS.md": "f332ebde4fbea437e34e976940fa8480a1d85b978e3b644a3642891a9eb3bcca",
+    "CLAUDE.md": "b7e2c49d980126d99a4f2853bd6c40d216c7a710f0265d729de39aa692d8f25b",
+    "src/apps/.gitkeep": "b7cdc4e59edc58ff4870e5ffc38d58d9ea625e37095aa91eac91547970b32663"
+  }
+}

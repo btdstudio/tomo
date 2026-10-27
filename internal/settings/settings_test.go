@@ -44,7 +44,7 @@ func TestProjectSupersedesGlobal(t *testing.T) {
 	globalPath := GlobalSettingsPath()
 	projectPath := ProjectSettingsPath(root)
 	writeSettings(t, globalPath, map[string]any{
-		"baseSource": "issue:12", "gates": "auto", "provider": "opencode",
+		"baseSource": "issue:12", "gates": "auto",
 		"issues": "local", "issuesDir": "tickets",
 	})
 	writeSettings(t, projectPath, map[string]any{"gates": "prompt", "issuesDir": "issues/custom"})
@@ -53,8 +53,8 @@ func TestProjectSupersedesGlobal(t *testing.T) {
 		t.Fatal(err)
 	}
 	e := loaded.Effective
-	if e.BaseSource != "issue:12" || e.Gates != "prompt" || e.Provider != "opencode" ||
-		e.ArtifactDir != ".tomo/specs" || e.Issues != "local" || e.IssuesDir != "issues/custom" {
+	if e.BaseSource != "issue:12" || e.Gates != "prompt" ||
+		e.ArtifactDir != "01_planning/specs" || e.Issues != "local" || e.IssuesDir != "issues/custom" {
 		t.Fatalf("effective = %+v", e)
 	}
 }
@@ -65,55 +65,7 @@ func TestInvalidGatesThrows(t *testing.T) {
 	}
 }
 
-func TestPersonasMergePerKey(t *testing.T) {
-	global := map[string]any{
-		"personas": map[string]any{
-			"map":    map[string]any{"plan": "security", "trace": "reviewer"},
-			"custom": map[string]any{"lead": "personas/lead.md"},
-		},
-	}
-	project := map[string]any{
-		"personas": map[string]any{
-			"map":    map[string]any{"plan": "architect"},
-			"custom": map[string]any{"pm": "personas/pm.md"},
-		},
-	}
-	eff, err := MergeSettings(global, project)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := Personas{
-		Map:    map[string]string{"plan": "architect", "trace": "reviewer"},
-		Custom: map[string]string{"lead": "personas/lead.md", "pm": "personas/pm.md"},
-	}
-	if !reflect.DeepEqual(eff.Personas, want) {
-		t.Fatalf("personas = %+v, want %+v", eff.Personas, want)
-	}
-}
-
-func TestPersonasDefaultsEmptyAndLoadLayers(t *testing.T) {
-	d := DefaultSettings().Personas
-	if !reflect.DeepEqual(d.Map, map[string]string{}) || !reflect.DeepEqual(d.Custom, map[string]string{}) {
-		t.Fatalf("default personas = %+v", d)
-	}
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	root := t.TempDir()
-	writeSettings(t, GlobalSettingsPath(), map[string]any{
-		"personas": map[string]any{"map": map[string]any{"debt": "security"}},
-	})
-	loaded, err := LoadSettings(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if loaded.Effective.Personas.Map["debt"] != "security" {
-		t.Fatalf("map.debt = %q", loaded.Effective.Personas.Map["debt"])
-	}
-	if !reflect.DeepEqual(loaded.Effective.Personas.Custom, map[string]string{}) {
-		t.Fatalf("custom = %v", loaded.Effective.Personas.Custom)
-	}
-}
-
-func TestInvalidIssuesFallsBackToGitHub(t *testing.T) {
+func TestInvalidIssuesFallsBackToLocal(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	root := t.TempDir()
 	writeSettings(t, ProjectSettingsPath(root), map[string]any{"issues": "bogus"})
@@ -121,7 +73,7 @@ func TestInvalidIssuesFallsBackToGitHub(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.Effective.Issues != "github" {
+	if loaded.Effective.Issues != "local" {
 		t.Fatalf("issues = %q", loaded.Effective.Issues)
 	}
 }

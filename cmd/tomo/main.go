@@ -1,21 +1,15 @@
-// Command tomo is the single binary that replaces the Node.js scripts and
-// .tomo/lib/*.js runtime helpers. It dispatches to install, render, check,
-// session-hook, and the runtime-helper subcommands the command bodies invoke.
+// Command tomo is the ICM tool: scaffold a folder-driven SDLC workspace
+// (`init`), refresh its managed files (`update`), add apps (`add`), and a
+// small set of workspace helpers.
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"os"
-	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/btdstudio/tomo/internal/cli"
-	"github.com/btdstudio/tomo/internal/hook"
-	"github.com/btdstudio/tomo/internal/install"
-	"github.com/btdstudio/tomo/internal/providers"
-	"github.com/btdstudio/tomo/internal/render"
+	"github.com/btdstudio/tomo/internal/icm"
 	"github.com/btdstudio/tomo/internal/version"
 )
 
@@ -25,230 +19,100 @@ func main() {
 
 func run(args []string) int {
 	if len(args) == 0 {
-		fmt.Fprint(os.Stderr, cli.Usage)
+		cli.PrintUsage()
 		return 1
 	}
 	switch args[0] {
 	case "version", "--version", "-v":
 		fmt.Printf("tomo version %s\n", version.String())
 		return 0
-	case "install":
-		return runInstall(args[1:])
-	case "render":
-		return runRender(args[1:])
+	case "init":
+		return runInit(args[1:])
+	case "update":
+		return runUpdate()
+	case "add":
+		return runAdd(args[1:])
 	case "check":
-		problems, err := render.CheckContent()
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		for _, p := range problems {
-			fmt.Fprintln(os.Stderr, p)
-		}
-		if len(problems) > 0 {
-			return 1
-		}
-		fmt.Println("content store is in sync")
-		return 0
-	case "session-hook":
-		if msg := hook.SessionMessage(mustCwd()); msg != "" {
-			fmt.Println(msg)
-		}
-		return 0
+		return runCheck()
 	default:
 		return cli.Run(args)
 	}
 }
 
-func mustCwd() string {
-	wd, _ := os.Getwd()
-	return wd
-}
-
-// runRender writes the in-memory rendered output to a directory (--out), or
-// lists the filenames when no --out is given.
-func runRender(args []string) int {
-	outDir := ""
+func runInit(args []string) int {
+	dir := "."
+	noGit := false
+	force := false
 	for i := 0; i < len(args); i++ {
 		switch a := args[i]; {
-		case a == "--out":
-			if i+1 >= len(args) {
-				fmt.Fprintln(os.Stderr, "tomo render: --out needs a value")
-				return 1
-			}
-			i++
-			outDir = args[i]
+		case a == "--no-git":
+			noGit = true
+		case a == "--force":
+			force = true
 		case a == "--help" || a == "-h":
-			fmt.Fprintln(os.Stderr, "tomo render [--out <dir>]")
+			fmt.Println("usage: tomo init [dir] [--no-git] [--force]")
 			return 0
-		default:
-			fmt.Fprintf(os.Stderr, "unknown argument: %s\n", a)
+		case strings.HasPrefix(a, "-"):
+			fmt.Fprintf(os.Stderr, "tomo init: unknown flag %s\n", a)
 			return 1
+		default:
+			dir = a
 		}
 	}
-	all, err := render.GenerateAll()
+	rep, err := icm.Scaffold(dir, icm.Options{NoGit: noGit, Force: force})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	names := make([]string, 0, len(all))
-	for name := range all {
-		names = append(names, name)
+	for _, rel := range rep.Written {
+		fmt.Println("wrote", rel)
 	}
-	sort.Strings(names)
-	if outDir == "" {
-		for _, name := range names {
-			fmt.Println(name)
-		}
-		return 0
+	if rep.GitInit {
+		fmt.Println("git init")
 	}
-	for _, name := range names {
-		p := filepath.Join(outDir, name)
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		if err := os.WriteFile(p, []byte(all[name]), 0o644); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		fmt.Println(filepath.ToSlash(p))
-	}
+	fmt.Printf("scaffolded ICM workspace in %s\n", dir)
 	return 0
 }
 
-func runInstall(args []string) int {
-	var globalFlag bool
-	var providerSpec string
-	project := mustCwd()
-	providerSet := false
-
-	for i := 0; i < len(args); i++ {
-		switch a := args[i]; {
-		case a == "--global":
-			globalFlag = true
-		case a == "--project":
-			if i+1 >= len(args) {
-				fmt.Fprintln(os.Stderr, "tomo install: --project needs a value")
-				return 1
-			}
-			i++
-			project, _ = filepath.Abs(args[i])
-		case strings.HasPrefix(a, "--provider="):
-			providerSpec = strings.TrimPrefix(a, "--provider=")
-			providerSet = true
-		case a == "--provider":
-			if i+1 >= len(args) {
-				fmt.Fprintln(os.Stderr, "tomo install: --provider needs a value")
-				return 1
-			}
-			i++
-			providerSpec = args[i]
-			providerSet = true
-		case a == "--help" || a == "-h":
-			printInstallHelp()
-			return 0
-		default:
-			fmt.Fprintf(os.Stderr, "unknown argument: %s\n", a)
-			return 1
-		}
-	}
-
-	var ids []string
-	var err error
-	if providerSet {
-		ids, err = providers.ParseProviderSpec(providerSpec)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-	} else if isTTY() {
-		ids, err = promptProviders()
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-	} else {
-		ids = providers.ProviderIds()
-	}
-
-	var notices []install.Notice
-	written, err := install.Install(install.Options{
-		Project:   project,
-		Global:    globalFlag,
-		Providers: ids,
-		Notices:   &notices,
-	})
+func runUpdate() int {
+	rep, err := icm.Update(".")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-
-	base := project
-	label := "installed"
-	if globalFlag {
-		label = "linked"
-		base, _ = os.UserHomeDir()
+	for _, rel := range rep.Updated {
+		fmt.Println("updated", rel)
 	}
-	for _, p := range written {
-		rel, _ := filepath.Rel(base, p)
-		if rel == "" {
-			rel = filepath.Base(p)
-		}
-		fmt.Println(label, filepath.ToSlash(rel))
+	for _, rel := range rep.Skipped {
+		fmt.Println("skipped (edited)", rel)
 	}
-	harness := fmt.Sprintf("%d harnesses", len(ids))
-	if len(ids) == 1 {
-		harness = ids[0]
-	}
-	if globalFlag {
-		fmt.Printf("tomo wrappers copied into your user dirs for %s — every project now has /tomo\n", harness)
-	} else {
-		fmt.Printf("tomo installed into %s (%s); .tomo/ seeded. Re-run to update.\n", project, harness)
-	}
-	for _, n := range notices {
-		fmt.Printf("\nopencode: could not add the tomo read grant to %s (%s).\nAdd this to your opencode config so reads of %s don't prompt:\n%s\n", n.Path, n.Reason, n.Pattern, n.Snippet)
-	}
+	fmt.Printf("update complete (%d updated, %d skipped, %d unchanged)\n",
+		len(rep.Updated), len(rep.Skipped), len(rep.Unchanged))
 	return 0
 }
 
-func printInstallHelp() {
-	fmt.Printf(`tomo install
-
-  PROJECT install  copies the /tomo commands into the current project and seeds
-                   .tomo/ with templates, personas, and the tomo binary:
-      tomo install
-      tomo install --project <dir>
-      tomo install --provider opencode[,claude]   (or --provider all)
-
-  GLOBAL install   copies the commands into your user-level harness dirs so
-                   every project has /tomo:
-      tomo install --global [--provider ...]
-
-  PROVIDER         which harness's command wrappers and persona subagents to
-                   materialize. Prompted on an interactive terminal; defaults to
-                   all (%s).
-`, strings.Join(providers.ProviderIds(), " + "))
-}
-
-func isTTY() bool {
-	info, err := os.Stdin.Stat()
+func runAdd(args []string) int {
+	if len(args) < 2 {
+		fmt.Fprintln(os.Stderr, "usage: tomo add kumi|hachigo <name>")
+		return 1
+	}
+	rep, err := icm.Add(".", args[0], args[1])
 	if err != nil {
-		return false
+		fmt.Fprintln(os.Stderr, err)
+		return 1
 	}
-	return info.Mode()&os.ModeCharDevice != 0
+	fmt.Printf("added %s from %s at %s\n", args[1], rep.Source, rep.Path)
+	return 0
 }
 
-func promptProviders() ([]string, error) {
-	fmt.Printf("Which AI coding harness(es) do you use? (all | %s) [all]: ", strings.Join(providers.ProviderIds(), " | "))
-	reader := bufio.NewReader(os.Stdin)
-	answer, err := reader.ReadString('\n')
-	if err != nil && answer == "" {
-		return providers.ProviderIds(), nil
+func runCheck() int {
+	problems := icm.Check()
+	for _, p := range problems {
+		fmt.Fprintln(os.Stderr, p)
 	}
-	answer = strings.TrimSpace(answer)
-	if answer == "" {
-		answer = "all"
+	if len(problems) > 0 {
+		return 1
 	}
-	return providers.ParseProviderSpec(answer)
+	fmt.Println("scaffold is clean")
+	return 0
 }
