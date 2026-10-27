@@ -93,10 +93,10 @@ func runUpdate() int {
 
 func runAdd(args []string) int {
 	if len(args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: tomo add kumi|hachigo <name>")
+		fmt.Fprintln(os.Stderr, "usage: tomo add kumi|hachigo <name> [module-path]")
 		return 1
 	}
-	rep, err := icm.Add(".", args[0], args[1])
+	rep, err := icm.Add(".", args[0], args[1], args[2:]...)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1

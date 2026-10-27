@@ -33,7 +33,7 @@ func DefaultSettings() Settings {
 		ArtifactDir: "01_planning/specs",
 		Issues:      "local",
 		IssuesDir:   "00_issues",
-		AppSources:  map[string]string{"kumi": "github.com/btdstudio/kumi", "hachigo": "github.com/btdstudio/hachigo"},
+		AppSources:  map[string]string{"kumi": "github.com/btdstudio/kumi/cmd/kumi", "hachigo": "github.com/btdstudio/hachigo/cmd/hachigo"},
 	}
 }
 
