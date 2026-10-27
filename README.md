@@ -11,7 +11,6 @@ framework or runtime is required after scaffold.
 The Interpretable Context Methodology (ICM) that tomo implements is inspired by:
 
 - **Jake Van Clief** — ["Stop Building AI Agents. Use This Folder System Instead"](https://youtu.be/MkN-ss2Nl10)
-- **Don's Bookshelf** — ["How to Build an AI Agent Out of Nothing but Folders"](https://youtu.be/odOd-IQgdh4)
 
 ## Install
 
