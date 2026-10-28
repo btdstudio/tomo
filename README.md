@@ -10,8 +10,7 @@ framework or runtime is required after scaffold.
 
 The Interpretable Context Methodology (ICM) that tomo implements is inspired by:
 
-- **Jake Van Clief** — ["Stop Building AI Agents. Use This Folder System Instead"](https://youtu.be/MkN-ss2Nl10)
-- **Don's Bookshelf** — ["How to Build an AI Agent Out of Nothing but Folders"](https://youtu.be/odOd-IQgdh4)
+- **Jake Van Clief**, **David McDermott** — ["Interpretable Context Methodology: Folder Structure as Agentic Architecture"](https://arxiv.org/abs/2603.16021)
 
 ## Install
 
@@ -25,8 +24,8 @@ go install github.com/btdstudio/tomo/cmd/tomo@latest
 |---|---|
 | `tomo init [dir]` | scaffold the ICM structure |
 | `tomo update` | refresh managed files to the installed version |
-| `tomo add kumi <name> [module-path]` | scaffold a kumi Go+HTMX app into `src/apps/<name>/` |
-| `tomo add hachigo <name>` | scaffold a hachigo site into `src/apps/<name>/` |
+| `tomo add kumi <name> [module-path]` | scaffold a [kumi Go+HTMX app](https://github.com/btdstudio/kumi) into `src/apps/<name>/` |
+| `tomo add hachigo <name>` | scaffold a [hachigo site](https://github.com/btdstudio/hachigo) into `src/apps/<name>/` |
 | `tomo status` | show the active change |
 | `tomo settings` | show/merge settings |
 | `tomo switch <change>` | switch the active change |
