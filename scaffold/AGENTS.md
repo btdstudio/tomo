@@ -25,8 +25,8 @@ tomo, which folds test authoring into the coder and adequacy into the reviewer.
 |---|---|
 | `tomo init [dir]` | scaffold this ICM structure |
 | `tomo update` | refresh managed files to the installed version |
-| `tomo add kumi <name> [module-path]` | scaffold a kumi Go+HTMX app into `src/apps/<name>/` |
-| `tomo add hachigo <name>` | scaffold a hachigo site into `src/apps/<name>/` |
+| `tomo add kumi <name> [module-path]` | scaffold a kumi Go+HTMX app (location from `.tomo/settings.json`: `outputDir` + `projectType`) |
+| `tomo add hachigo <name>` | scaffold a hachigo site (location from `.tomo/settings.json`: `outputDir` + `projectType`) |
 | `tomo status` | show the active change's phase/status |
 | `tomo settings` | show/merge settings |
 | `tomo switch <change>` | switch the active change |
@@ -55,10 +55,10 @@ it like `git` or `gh`. Prefer `tomo <command>` over hand-editing `.tomo/` or
 | Write requirements | `01_planning/` | analyst | `01_planning/context.md`, `00_issues/*` | `src/*`, `03_testing/*` |
 | Design solution | `01_planning/` | architect | `01_planning/context.md`, `specs/<n>-<slug>/requirements.md` | `src/*` |
 | Plan tasks | `01_planning/` | architect | `specs/<n>-<slug>/design.md` | `src/*` |
-| Implement code | `02_implementation/` | coder | `02_implementation/context.md`, `01_planning/specs/<n>-<slug>/*`, `src/apps/*` | `04_refactoring/*` |
-| Test | `03_testing/` | qa | `03_testing/context.md`, `src/apps/*`, `specs/<n>-<slug>/requirements.md` | `00_issues/*` |
-| Review | `04_refactoring/` | reviewer | `04_refactoring/context.md`, `src/apps/*`, `specs/<n>-<slug>/*` | `00_issues/*` |
-| Security pass | `04_refactoring/` | security | `04_refactoring/context.md`, `src/apps/*` | `00_issues/*` |
+| Implement code | `02_implementation/` | coder | `02_implementation/context.md`, `01_planning/specs/<n>-<slug>/*`, `app code (see settings.outputDir/projectType)` | `04_refactoring/*` |
+| Test | `03_testing/` | qa | `03_testing/context.md`, `app code (see settings.outputDir/projectType)`, `specs/<n>-<slug>/requirements.md` | `00_issues/*` |
+| Review | `04_refactoring/` | reviewer | `04_refactoring/context.md`, `app code (see settings.outputDir/projectType)`, `specs/<n>-<slug>/*` | `00_issues/*` |
+| Security pass | `04_refactoring/` | security | `04_refactoring/context.md`, `app code (see settings.outputDir/projectType)` | `00_issues/*` |
 
 ## Naming conventions
 
@@ -66,7 +66,7 @@ it like `git` or `gh`. Prefer `tomo <command>` over hand-editing `.tomo/` or
 - Issues: `00_issues/<id>.md`
 - Personas: `<stage>/personas/<name>.md`
 - Templates: `01_planning/templates/<artifact>.md`
-- Apps: `src/apps/<name>/`
+- Apps: location from `.tomo/settings.json` (`outputDir` + `projectType`; defaults `src` + `monorepo` → `src/apps/<name>/`)
 
 ## Workflow rules
 
@@ -74,6 +74,10 @@ it like `git` or `gh`. Prefer `tomo <command>` over hand-editing `.tomo/` or
 - Each phase stops at a gate for human approval — never proceed past a gate on
   your own (tracked in `.tomo/state.json`).
 - Read only the files the routing table names for your task; skip the rest.
+- App code location comes from `.tomo/settings.json`: `outputDir` (default `src`)
+  and `projectType` (`monorepo` default → `<outputDir>/apps/<name>/`;
+  `standard` → `<outputDir>/` is the app root). Consult both before touching
+  app code.
 - Always write or update tests for new behavior.
 - Use conventional commit messages.
 
