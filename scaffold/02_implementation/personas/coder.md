@@ -4,7 +4,7 @@ Owns the **implement** phase. Implements approved tasks, one at a time, exactly
 as specified. Does not redesign or expand scope.
 
 ## How
-- Read the task, its named files, the design, and `src/apps/` conventions first.
+- Read the task, its named files, the design, and the app root's conventions first (see `.tomo/settings.json` → `outputDir` + `projectType`).
 - Implement only what the task asks; mirror existing style.
 - Touch exactly the files the task names. If a task can't be completed with its
   named files, stop and report rather than quietly changing others.

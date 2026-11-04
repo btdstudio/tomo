@@ -24,8 +24,8 @@ go install github.com/btdstudio/tomo/cmd/tomo@latest
 |---|---|
 | `tomo init [dir]` | scaffold the ICM structure |
 | `tomo update` | refresh managed files to the installed version |
-| `tomo add kumi <name> [module-path]` | scaffold a [kumi Go+HTMX app](https://github.com/btdstudio/kumi) into `src/apps/<name>/` |
-| `tomo add hachigo <name>` | scaffold a [hachigo site](https://github.com/btdstudio/hachigo) into `src/apps/<name>/` |
+| `tomo add kumi <name> [module-path]` | scaffold a [kumi Go+HTMX app](https://github.com/btdstudio/kumi) (location from `.tomo/settings.json`: `outputDir` + `projectType`) |
+| `tomo add hachigo <name>` | scaffold a [hachigo site](https://github.com/btdstudio/hachigo) (location from `.tomo/settings.json`: `outputDir` + `projectType`) |
 | `tomo status` | show the active change |
 | `tomo settings` | show/merge settings |
 | `tomo switch <change>` | switch the active change |

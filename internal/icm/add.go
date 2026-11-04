@@ -46,16 +46,57 @@ func Add(dir, appType, name string, extraArgs ...string) (AddReport, error) {
 		return rep, fmt.Errorf("tomo add: install %s: %w", installPath, err)
 	}
 
-	appsDir := filepath.Join(dir, "src", "apps")
-	if err := os.MkdirAll(appsDir, 0o755); err != nil {
-		return rep, err
+	outputDir := loaded.Effective.OutputDir
+	if outputDir == "" {
+		outputDir = "src"
 	}
-	args := append([]string{sub, name}, extraArgs...)
+	projectType := loaded.Effective.ProjectType
+	if projectType == "" {
+		projectType = "monorepo"
+	}
+
+	var outputAbs string
+	if filepath.IsAbs(outputDir) {
+		outputAbs = outputDir
+	} else {
+		outputAbs = filepath.Join(dir, outputDir)
+	}
+
+	var appsDir, nameOverride string
+	var repPath string
+	if projectType == "standard" {
+		// scaffold directly into outputDir: run the tool in its parent with
+		// the output dir's basename as the project name.
+		parent := filepath.Dir(outputAbs)
+		nm := filepath.Base(outputAbs)
+		if nm == "" || nm == "." || nm == string(filepath.Separator) {
+			return rep, fmt.Errorf("tomo add: invalid outputDir %q", outputDir)
+		}
+		if err := os.MkdirAll(parent, 0o755); err != nil {
+			return rep, err
+		}
+		appsDir = parent
+		nameOverride = nm
+		repPath = outputAbs
+	} else {
+		base := outputAbs
+		appsDir = filepath.Join(base, "apps")
+		if err := os.MkdirAll(appsDir, 0o755); err != nil {
+			return rep, err
+		}
+		repPath = filepath.Join(appsDir, name)
+	}
+
+	scaffoldName := name
+	if nameOverride != "" {
+		scaffoldName = nameOverride
+	}
+	args := append([]string{sub, scaffoldName}, extraArgs...)
 	if err := runCmd(appsDir, bin, args...); err != nil {
 		return rep, fmt.Errorf("tomo add: %s %s: %w", appType, sub, err)
 	}
 
-	rep.Path = filepath.Join(appsDir, name)
+	rep.Path = repPath
 	rep.Source = installPath
 	return rep, nil
 }

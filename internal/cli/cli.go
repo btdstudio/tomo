@@ -58,7 +58,7 @@ func PrintUsage() {
 Usage:
   tomo init [dir] [--no-git] [--force]   scaffold the ICM structure
   tomo update                             refresh managed files
-  tomo add kumi|hachigo <name> [module]   scaffold an app into src/apps/<name>/
+  tomo add kumi|hachigo <name> [module]   scaffold an app into <outputDir>/apps/<name>/ (default src/apps/)
   tomo status                             show the active change
   tomo settings                           show effective settings
   tomo switch <change>                    switch the active change
@@ -101,6 +101,8 @@ func runSettings(root string) int {
 	fmt.Printf("artifactDir: %s\n", e.ArtifactDir)
 	fmt.Printf("issues:      %s\n", e.Issues)
 	fmt.Printf("issuesDir:   %s\n", e.IssuesDir)
+	fmt.Printf("outputDir:   %s\n", e.OutputDir)
+	fmt.Printf("projectType: %s\n", e.ProjectType)
 	for k, v := range e.AppSources {
 		fmt.Printf("appSource.%s: %s\n", k, v)
 	}

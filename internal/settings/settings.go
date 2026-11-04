@@ -15,6 +15,7 @@ import (
 
 var VALID_GATES = []string{"block", "prompt", "auto"}
 var VALID_ISSUES = []string{"local"}
+var VALID_PROJECT_TYPES = []string{"monorepo", "standard"}
 
 // Settings is the effective settings shape.
 type Settings struct {
@@ -23,6 +24,8 @@ type Settings struct {
 	ArtifactDir string            `json:"artifactDir"`
 	Issues      string            `json:"issues"`
 	IssuesDir   string            `json:"issuesDir"`
+	OutputDir   string            `json:"outputDir"`
+	ProjectType string            `json:"projectType"`
 	AppSources  map[string]string `json:"appSources"`
 }
 
@@ -33,6 +36,8 @@ func DefaultSettings() Settings {
 		ArtifactDir: "01_planning/specs",
 		Issues:      "local",
 		IssuesDir:   "00_issues",
+		OutputDir:   "src",      // default output directory for generated apps
+		ProjectType: "monorepo", // monorepo: outputDir/apps/<name>; standard: outputDir is the app root
 		AppSources:  map[string]string{"kumi": "github.com/btdstudio/kumi/cmd/kumi", "hachigo": "github.com/btdstudio/hachigo/cmd/hachigo"},
 	}
 }
@@ -95,6 +100,10 @@ func stringField(s *Settings, key, val string) {
 		s.Issues = val
 	case "issuesDir":
 		s.IssuesDir = val
+	case "outputDir":
+		s.OutputDir = val
+	case "projectType":
+		s.ProjectType = val
 	}
 }
 
@@ -123,6 +132,10 @@ func MergeSettings(layers ...map[string]any) (Settings, error) {
 	if !contains(VALID_ISSUES, out.Issues) {
 		fmt.Fprintf(os.Stderr, "tomo: invalid issues %q (expected %s); using \"local\"\n", out.Issues, join(VALID_ISSUES, "|"))
 		out.Issues = "local"
+	}
+	if !contains(VALID_PROJECT_TYPES, out.ProjectType) {
+		fmt.Fprintf(os.Stderr, "tomo: invalid projectType %q (expected %s); using \"monorepo\"\n", out.ProjectType, join(VALID_PROJECT_TYPES, "|"))
+		out.ProjectType = "monorepo"
 	}
 	return out, nil
 }
