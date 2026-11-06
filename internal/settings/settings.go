@@ -33,7 +33,7 @@ func DefaultSettings() Settings {
 	return Settings{
 		BaseSource:  "", // default base requirement source: file | "issue:N" | "url:..."
 		Gates:       "block",
-		ArtifactDir: "01_planning/specs",
+		ArtifactDir: state.DefaultArtifactDir,
 		Issues:      "local",
 		IssuesDir:   "00_issues",
 		OutputDir:   "src",      // default output directory for generated apps

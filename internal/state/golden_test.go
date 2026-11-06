@@ -24,7 +24,7 @@ func TestGoldenStateByteIdentity(t *testing.T) {
 	Now = func() time.Time { return time.Date(2026, 10, 24, 0, 0, 0, 0, time.UTC) }
 
 	root := t.TempDir()
-	os.MkdirAll(filepath.Join(SpecsDir(root), "1-sample"), 0o755)
+	os.MkdirAll(filepath.Join(SpecsDir(root, ""), "1-sample"), 0o755)
 	st := DefaultState()
 	st.Change = "1-sample"
 	if err := SetGate(&st, "requirements", "await-approval"); err != nil {
@@ -47,8 +47,8 @@ func TestGoldenStateMultiByteIdentity(t *testing.T) {
 	Now = func() time.Time { return time.Date(2026, 10, 24, 0, 0, 0, 0, time.UTC) }
 
 	root := t.TempDir()
-	os.MkdirAll(filepath.Join(SpecsDir(root), "1-alpha"), 0o755)
-	os.MkdirAll(filepath.Join(SpecsDir(root), "2-beta"), 0o755)
+	os.MkdirAll(filepath.Join(SpecsDir(root, ""), "1-alpha"), 0o755)
+	os.MkdirAll(filepath.Join(SpecsDir(root, ""), "2-beta"), 0o755)
 
 	a := DefaultState()
 	a.Change = "1-alpha"
@@ -59,7 +59,7 @@ func TestGoldenStateMultiByteIdentity(t *testing.T) {
 	if err := SaveState(root, &a); err != nil {
 		t.Fatal(err)
 	}
-	b, err := SwitchTo(root, "2-beta")
+	b, err := SwitchTo(root, "2-beta", "")
 	if err != nil {
 		t.Fatal(err)
 	}

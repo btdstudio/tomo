@@ -125,8 +125,8 @@ func TestImplementUsesRunPhaseStatuses(t *testing.T) {
 
 func TestSaveStateWritesSlimShapeAndLoadResolves(t *testing.T) {
 	root := t.TempDir()
-	os.MkdirAll(filepath.Join(SpecsDir(root), "1-alpha"), 0o755)
-	os.MkdirAll(filepath.Join(SpecsDir(root), "2-beta"), 0o755)
+	os.MkdirAll(filepath.Join(SpecsDir(root, ""), "1-alpha"), 0o755)
+	os.MkdirAll(filepath.Join(SpecsDir(root, ""), "2-beta"), 0o755)
 
 	a := DefaultState()
 	a.Change = "1-alpha"
@@ -138,7 +138,7 @@ func TestSaveStateWritesSlimShapeAndLoadResolves(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	b, err := SwitchTo(root, "2-beta")
+	b, err := SwitchTo(root, "2-beta", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +181,7 @@ func TestSaveStateWritesSlimShapeAndLoadResolves(t *testing.T) {
 		t.Fatalf("active = %+v", active)
 	}
 
-	switched, err := SwitchTo(root, "1-alpha")
+	switched, err := SwitchTo(root, "1-alpha", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +195,7 @@ func TestSaveStateWritesSlimShapeAndLoadResolves(t *testing.T) {
 
 func TestLegacyThreeGateStateStillLoads(t *testing.T) {
 	root := t.TempDir()
-	os.MkdirAll(SpecsDir(root), 0o755)
+	os.MkdirAll(SpecsDir(root, ""), 0o755)
 	writeJSON(t, StatePath(root), map[string]any{
 		"phase":   "plan",
 		"status":  "approved",
@@ -214,29 +214,29 @@ func TestLegacyThreeGateStateStillLoads(t *testing.T) {
 
 func TestArtifactPaths(t *testing.T) {
 	root := t.TempDir()
-	want := filepath.Join(root, ".tomo", "specs", "1-local-issue-store", "requirements.md")
-	if got := ArtifactPath(root, "1-local-issue-store", "requirements.md"); got != want {
+	want := filepath.Join(root, "01_planning", "specs", "1-local-issue-store", "requirements.md")
+	if got := ArtifactPath(root, "1-local-issue-store", "requirements.md", ""); got != want {
 		t.Fatalf("artifactPath = %q, want %q", got, want)
 	}
-	if got := ArtifactPath(root, "", "findings.md"); got != filepath.Join(root, ".tomo", "specs", "findings.md") {
+	if got := ArtifactPath(root, "", "findings.md", ""); got != filepath.Join(root, "01_planning", "specs", "findings.md") {
 		t.Fatalf("artifactPath empty change = %q", got)
 	}
 }
 
 func TestNextChangeId(t *testing.T) {
 	root := t.TempDir()
-	if NextChangeId(root) != 1 {
-		t.Fatalf("no specs dir -> 1, got %d", NextChangeId(root))
+	if NextChangeId(root, "") != 1 {
+		t.Fatalf("no specs dir -> 1, got %d", NextChangeId(root, ""))
 	}
-	os.MkdirAll(SpecsDir(root), 0o755)
-	if NextChangeId(root) != 1 {
+	os.MkdirAll(SpecsDir(root, ""), 0o755)
+	if NextChangeId(root, "") != 1 {
 		t.Fatalf("empty specs -> 1")
 	}
-	os.MkdirAll(filepath.Join(SpecsDir(root), "1-wrappers"), 0o755)
-	os.MkdirAll(filepath.Join(SpecsDir(root), "2-tasks-layout"), 0o755)
-	os.WriteFile(filepath.Join(SpecsDir(root), "README.md"), []byte("x"), 0o644)
-	if NextChangeId(root) != 3 {
-		t.Fatalf("got %d, want 3", NextChangeId(root))
+	os.MkdirAll(filepath.Join(SpecsDir(root, ""), "1-wrappers"), 0o755)
+	os.MkdirAll(filepath.Join(SpecsDir(root, ""), "2-tasks-layout"), 0o755)
+	os.WriteFile(filepath.Join(SpecsDir(root, ""), "README.md"), []byte("x"), 0o644)
+	if NextChangeId(root, "") != 3 {
+		t.Fatalf("got %d, want 3", NextChangeId(root, ""))
 	}
 }
 
@@ -258,18 +258,18 @@ func TestSlugify(t *testing.T) {
 
 func TestChangeDirResolvesToSpecsBaseWhenEmpty(t *testing.T) {
 	root := t.TempDir()
-	if ChangeDir(root, "") != SpecsDir(root) {
+	if ChangeDir(root, "", "") != SpecsDir(root, "") {
 		t.Fatalf("empty change should resolve to specs base")
 	}
-	if ChangeDir(root, "3-thing") != filepath.Join(SpecsDir(root), "3-thing") {
+	if ChangeDir(root, "3-thing", "") != filepath.Join(SpecsDir(root, ""), "3-thing") {
 		t.Fatalf("named change path wrong")
 	}
 }
 
 func TestEachChangeKeepsOwnMachine(t *testing.T) {
 	root := t.TempDir()
-	os.MkdirAll(filepath.Join(SpecsDir(root), "1-local-issue-store"), 0o755)
-	os.MkdirAll(filepath.Join(SpecsDir(root), "2-wrappers"), 0o755)
+	os.MkdirAll(filepath.Join(SpecsDir(root, ""), "1-local-issue-store"), 0o755)
+	os.MkdirAll(filepath.Join(SpecsDir(root, ""), "2-wrappers"), 0o755)
 
 	st := DefaultState()
 	st.Change = "1-local-issue-store"
@@ -281,7 +281,7 @@ func TestEachChangeKeepsOwnMachine(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	other, err := SwitchTo(root, "2-wrappers")
+	other, err := SwitchTo(root, "2-wrappers", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,7 +289,7 @@ func TestEachChangeKeepsOwnMachine(t *testing.T) {
 		t.Fatalf("fresh folder = %+v", other)
 	}
 
-	back, err := SwitchTo(root, "1-local-issue-store")
+	back, err := SwitchTo(root, "1-local-issue-store", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -306,17 +306,17 @@ func TestEachChangeKeepsOwnMachine(t *testing.T) {
 
 func TestSwitchRejectsUnknownsAndKnownChangesLists(t *testing.T) {
 	root := t.TempDir()
-	if _, err := SwitchTo(root, "nope"); err == nil || !strings.Contains(err.Error(), "unknown change") {
+	if _, err := SwitchTo(root, "nope", ""); err == nil || !strings.Contains(err.Error(), "unknown change") {
 		t.Fatalf("want unknown change (nope), got %v", err)
 	}
-	if _, err := SwitchTo(root, ""); err == nil || !strings.Contains(err.Error(), "unknown change") {
+	if _, err := SwitchTo(root, "", ""); err == nil || !strings.Contains(err.Error(), "unknown change") {
 		t.Fatalf("want unknown change (empty), got %v", err)
 	}
-	os.MkdirAll(filepath.Join(SpecsDir(root), "1-a"), 0o755)
-	os.MkdirAll(filepath.Join(SpecsDir(root), "2-b"), 0o755)
-	os.WriteFile(filepath.Join(SpecsDir(root), "README.md"), []byte("x"), 0o644)
+	os.MkdirAll(filepath.Join(SpecsDir(root, ""), "1-a"), 0o755)
+	os.MkdirAll(filepath.Join(SpecsDir(root, ""), "2-b"), 0o755)
+	os.WriteFile(filepath.Join(SpecsDir(root, ""), "README.md"), []byte("x"), 0o644)
 
-	kc, err := KnownChanges(root)
+	kc, err := KnownChanges(root, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -337,7 +337,7 @@ func TestSwitchRejectsUnknownsAndKnownChangesLists(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	kc, _ = KnownChanges(root)
+	kc, _ = KnownChanges(root, "")
 	find := func(name string) KnownChange {
 		for _, c := range kc {
 			if c.Name == name {
@@ -392,8 +392,30 @@ func TestUpdatedAtFormatMatchesJSISOString(t *testing.T) {
 func TestSwitchRejectsTraversalNames(t *testing.T) {
 	root := t.TempDir()
 	for _, name := range []string{"1-../escape", "1-a/../../x", "1-Weird_Name", "nope", ""} {
-		if _, err := SwitchTo(root, name); err == nil || !strings.Contains(err.Error(), "unknown change") {
+		if _, err := SwitchTo(root, name, ""); err == nil || !strings.Contains(err.Error(), "unknown change") {
 			t.Fatalf("switch(%q) should be rejected, got %v", name, err)
 		}
+	}
+}
+
+func TestSwitchToHonorsCustomArtifactDir(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "custom", "specs", "1-x"), 0o755)
+	st, err := SwitchTo(root, "1-x", "custom/specs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Change != "1-x" {
+		t.Fatalf("change = %q", st.Change)
+	}
+}
+
+func TestSpecsDirDefaultsAndCustom(t *testing.T) {
+	root := t.TempDir()
+	if got := SpecsDir(root, ""); got != filepath.Join(root, "01_planning", "specs") {
+		t.Fatalf("default specs dir = %q", got)
+	}
+	if got := SpecsDir(root, "custom/specs"); got != filepath.Join(root, "custom", "specs") {
+		t.Fatalf("custom specs dir = %q", got)
 	}
 }

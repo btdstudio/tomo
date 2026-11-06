@@ -114,7 +114,12 @@ func runSwitch(root string, args []string) int {
 		fmt.Fprintln(os.Stderr, "usage: tomo switch <change>")
 		return 1
 	}
-	st, err := state.SwitchTo(root, args[0])
+	loaded, err := settings.LoadSettings(root)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	st, err := state.SwitchTo(root, args[0], loaded.Effective.ArtifactDir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
