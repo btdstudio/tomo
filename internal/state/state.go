@@ -258,20 +258,22 @@ func SaveState(root string, st *State) error {
 	return os.WriteFile(StatePath(root), buf, 0o644)
 }
 
-// ReadChanges returns the per-change phase-machine records in state.json
-// (empty when absent or unreadable).
+// ReadChanges returns the per-change phase-machine records in state.json.
+// It returns an empty map (and no error) when the file is absent. A corrupt
+// or unreadable file is a hard error so callers cannot silently discard
+// recorded change history.
 func ReadChanges(root string) (map[string]*changeRecord, error) {
-	data, err := os.ReadFile(StatePath(root))
+	p := StatePath(root)
+	data, err := os.ReadFile(p)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return map[string]*changeRecord{}, nil
 		}
-		return map[string]*changeRecord{}, nil
+		return nil, fmt.Errorf("tomo: cannot read %s: %v", p, err)
 	}
 	var sf stateFile
 	if err := json.Unmarshal(data, &sf); err != nil {
-		// unreadable/missing map — treat as empty
-		return map[string]*changeRecord{}, nil
+		return nil, fmt.Errorf("tomo: cannot parse %s: %v", p, err)
 	}
 	if sf.Changes == nil {
 		return map[string]*changeRecord{}, nil
@@ -290,7 +292,10 @@ type KnownChange struct {
 
 // KnownChanges lists the numbered folders under .tomo/specs/ sorted by id.
 func KnownChanges(root string) ([]KnownChange, error) {
-	changes, _ := ReadChanges(root)
+	changes, err := ReadChanges(root)
+	if err != nil {
+		return nil, err
+	}
 	out := []KnownChange{}
 	entries, err := os.ReadDir(SpecsDir(root))
 	if err != nil {
@@ -336,7 +341,10 @@ func SwitchTo(root, name string) (State, error) {
 	}
 	st := DefaultState()
 	st.Change = name
-	changes, _ := ReadChanges(root)
+	changes, err := ReadChanges(root)
+	if err != nil {
+		return State{}, err
+	}
 	if rec := changes[name]; rec != nil {
 		if rec.Phase != "" {
 			st.Phase = rec.Phase
