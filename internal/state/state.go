@@ -15,7 +15,7 @@
 //	                   LoadState resolves it into { phase, status, gates,
 //	                   sources, change, updatedAt }. Legacy files that still
 //	                   carry the machine at top level keep loading.
-//	.tomo/specs/       per-change folders: <id>-<slug>/requirements.md,
+//	01_planning/specs/ per-change folders: <id>-<slug>/requirements.md,
 //	                   design.md, tasks.json, plus ad-hoc outputs folded into
 //	                   the active change
 //	.tomo/log.md       one timestamped line per state change / gate
@@ -105,19 +105,28 @@ type stateFileOut struct {
 	Changes   map[string]*changeRecord `json:"changes"`
 }
 
+// DefaultArtifactDir is where per-change spec artifacts live, relative to the
+// project root (the ICM scaffold's 01_planning/specs/ convention).
+const DefaultArtifactDir = "01_planning/specs"
+
 func Workspace(root string) string { return filepath.Join(root, ".tomo") }
 
 func StatePath(root string) string { return filepath.Join(Workspace(root), "state.json") }
 
-func SpecsDir(root string) string { return filepath.Join(Workspace(root), "specs") }
+func SpecsDir(root, artifactDir string) string {
+	if artifactDir == "" {
+		artifactDir = DefaultArtifactDir
+	}
+	return filepath.Join(root, filepath.FromSlash(artifactDir))
+}
 
 // ChangeDir returns the path to one change folder. An empty change resolves to
 // the specs base itself (a guard for ad-hoc outputs when nothing is active).
-func ChangeDir(root, change string) string {
+func ChangeDir(root, change, artifactDir string) string {
 	if change != "" {
-		return filepath.Join(SpecsDir(root), change)
+		return filepath.Join(SpecsDir(root, artifactDir), change)
 	}
-	return SpecsDir(root)
+	return SpecsDir(root, artifactDir)
 }
 
 func LogPath(root string) string { return filepath.Join(Workspace(root), "log.md") }
@@ -125,21 +134,22 @@ func LogPath(root string) string { return filepath.Join(Workspace(root), "log.md
 func SlipPath(root string) string { return filepath.Join(Workspace(root), "SLIP.md") }
 
 // ArtifactPath is an artifact inside a specific change folder.
-func ArtifactPath(root, change, name string) string {
-	return filepath.Join(ChangeDir(root, change), name)
+func ArtifactPath(root, change, name, artifactDir string) string {
+	return filepath.Join(ChangeDir(root, change, artifactDir), name)
 }
 
 var changeIDRe = regexp.MustCompile(`^(\d+)-`)
 
 // changeNameRe is the strict grammar for an accepted change folder name: a
 // numeric id, a hyphen, then the kebab-case slug Slugify produces. SwitchTo
-// requires this so a name can never escape .tomo/specs via `..` or a separator.
+// requires this so a name can never escape 01_planning/specs via `..` or a
+// separator.
 var changeNameRe = regexp.MustCompile(`^(\d+)-[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
 // NextChangeId is the next sequential change id: highest numeric `<id>-` prefix
-// under specs + 1.
-func NextChangeId(root string) int {
-	entries, err := os.ReadDir(SpecsDir(root))
+// under the artifact dir + 1.
+func NextChangeId(root, artifactDir string) int {
+	entries, err := os.ReadDir(SpecsDir(root, artifactDir))
 	if err != nil {
 		return 1
 	}
@@ -290,14 +300,15 @@ type KnownChange struct {
 	Gates  Gates  `json:"gates"`
 }
 
-// KnownChanges lists the numbered folders under .tomo/specs/ sorted by id.
-func KnownChanges(root string) ([]KnownChange, error) {
+// KnownChanges lists the numbered folders under the artifact dir (default
+// 01_planning/specs) sorted by id.
+func KnownChanges(root, artifactDir string) ([]KnownChange, error) {
 	changes, err := ReadChanges(root)
 	if err != nil {
 		return nil, err
 	}
 	out := []KnownChange{}
-	entries, err := os.ReadDir(SpecsDir(root))
+	entries, err := os.ReadDir(SpecsDir(root, artifactDir))
 	if err != nil {
 		return out, nil
 	}
@@ -328,13 +339,13 @@ func KnownChanges(root string) ([]KnownChange, error) {
 }
 
 // SwitchTo points the workspace at a different change folder and resumes its
-// phase machine. The target folder must exist under .tomo/specs/ and match the
-// strict change-name grammar (no `..`, no separators, no symlinks).
-func SwitchTo(root, name string) (State, error) {
+// phase machine. The target folder must exist under the artifact dir and match
+// the strict change-name grammar (no `..`, no separators, no symlinks).
+func SwitchTo(root, name, artifactDir string) (State, error) {
 	if !changeNameRe.MatchString(name) {
 		return State{}, fmt.Errorf(`tomo: unknown change "%s" — run /tomo switch to list specs`, name)
 	}
-	dir := ChangeDir(root, name)
+	dir := ChangeDir(root, name, artifactDir)
 	info, err := os.Lstat(dir)
 	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return State{}, fmt.Errorf(`tomo: unknown change "%s" — run /tomo switch to list specs`, name)
