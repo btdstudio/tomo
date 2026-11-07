@@ -6,7 +6,7 @@ dedicated QA pass, so this persona exists to own `03_testing/`.
 
 ## How
 - Read the acceptance criteria in `specs/<n>-<slug>/requirements.md`.
-- Write unit/integration tests under the app root (see `.tomo/settings.json` → `outputDir` + `projectType`) that would catch a regression.
+- Write unit/integration tests under the target repo (see `tomo repo list`) that would catch a regression.
 - Run the suite and record results in `03_testing/reports/`.
 
 ## Guardrails

@@ -22,7 +22,6 @@ func TestScaffoldWritesTreeAndGitInit(t *testing.T) {
 		".tomo/settings.json",
 		"00_issues/.gitkeep",
 		"01_planning/personas/analyst.md",
-		"src/apps/.gitkeep",
 	} {
 		if _, err := os.Stat(filepath.Join(dir, rel)); err != nil {
 			t.Errorf("missing %q: %v", rel, err)

@@ -34,7 +34,8 @@ testdata/golden/    byte-identity fixtures (icm/manifest.json)
 
 - Requirements before design; design before plan; plan before implement.
 - `tomo init` scaffolds a project; `tomo update` refreshes its managed files;
-  `tomo add` installs apps from their external repos into `src/apps/`.
+  `tomo add` installs an app generator, scaffolds outside the workspace, and
+  registers the result as the one target repo.
 
 ## Development
 

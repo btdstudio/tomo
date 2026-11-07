@@ -10,17 +10,16 @@
     "01_planning/specs/.gitkeep": "8370c25222ccab5f5b696fad3e3d990267915b4adce2d4dfaf3880d8b57a5656",
     "01_planning/templates/design.md": "b872fae7fabd6ac433293287480081f639eb6e34190a10a88a31927d304629eb",
     "01_planning/templates/requirements.md": "122625c472f6ad48a379f9775f549e66a7f7f0ce1a3669b09e4ade002afc0b7e",
-    "02_implementation/context.md": "14c76a4a7f225aca87906e27adc15a0ff592cb14e5d79a4e88e9fd804d9bb846",
-    "02_implementation/personas/coder.md": "1dc48bf89bee0c4d85a40b40611c78b3695d0b6a2a0bcb8b16cfa8b04efe5c86",
-    "03_testing/context.md": "a29851a945b5d540315b606126f88a88c10cd49a52fff1f8681d0091aa9de774",
-    "03_testing/personas/qa.md": "7cd14945276fd63c446f0c7c5e1651209089559c7917ecbae89a87c128ba884e",
+    "02_implementation/context.md": "04cf2eb5d3fe3551245ff6045f9102d97ef3530eff49e278bf8d3bc1341d3c50",
+    "02_implementation/personas/coder.md": "0426a7e21cd0a599c4a857f2cd4e8d3b94faf64ed5188959c046af9fcb1f610e",
+    "03_testing/context.md": "a645f0f458876d9d8bde0c1b47a86de002246f2a00fa764b65de33149767d547",
+    "03_testing/personas/qa.md": "02e57c7dbdaf94d323bbb1e889f55f04b9333e6e874c68a881bb392b1cf66846",
     "03_testing/reports/.gitkeep": "801b5bfa548c739a4dd144ac8848bbb81ec3da9d1cfd6509fafd4a01832b961d",
-    "04_refactoring/context.md": "6206a8e8f095d178180e8b06c28fa63d84db34a58253e67137896b4c142017b3",
+    "04_refactoring/context.md": "fa59334ff6690332b15df32f932186121ffc41e0efcfcefabf0872764f9bf94c",
     "04_refactoring/personas/reviewer.md": "ffb96fd1fa5baef70a2c17f531b909aca983732c8ba482a770628ff9f2f85ad7",
     "04_refactoring/personas/security.md": "a256fa50b211a592a87baf1c949a8ed7a8444f28c7fc37cb595ffeb9e07b0eee",
     "04_refactoring/reviews/.gitkeep": "790adf5783174ecfbec10f4a852c99f75bdf1925a077b19137f3784e5b3d4724",
-    "AGENTS.md": "dfa7cfd707f155a589a41322fce8bb8e35f5e90839c7d7cd06f34bed05905643",
-    "CLAUDE.md": "b7e2c49d980126d99a4f2853bd6c40d216c7a710f0265d729de39aa692d8f25b",
-    "src/apps/.gitkeep": "b7cdc4e59edc58ff4870e5ffc38d58d9ea625e37095aa91eac91547970b32663"
+    "AGENTS.md": "d4ead24d7cf7798b1e915efb05a9bc25dbe51df46e0af4b03451581df8b73e00",
+    "CLAUDE.md": "b7e2c49d980126d99a4f2853bd6c40d216c7a710f0265d729de39aa692d8f25b"
   }
 }

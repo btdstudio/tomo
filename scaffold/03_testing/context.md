@@ -8,11 +8,11 @@ dedicated QA pass.)
 - `personas/qa.md` — writes/runs tests and checks them against requirements
 
 ## Input (read)
-- app code (the code under test; see `.tomo/settings.json` → `outputDir` + `projectType`)
+- target repo code (the code under test; see `tomo repo list`)
 - `01_planning/specs/<n>-<slug>/requirements.md` (acceptance criteria)
 
 ## Output (write)
-- tests alongside the app under the app root (see `.tomo/settings.json` → `outputDir` + `projectType`)
+- tests alongside the app under the target repo (see `tomo repo list`)
 - `reports/<feature>_test_results.md` — run results & coverage
 
 ## Gate

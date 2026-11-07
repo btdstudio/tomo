@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/btdstudio/kiso/repos"
 	"github.com/btdstudio/tomo/internal/settings"
 )
 
@@ -16,6 +17,13 @@ type AddReport struct {
 	Source string
 }
 
+// AddOptions configure Add.
+type AddOptions struct {
+	Path   string   // where the app goes; its last element is the folder the tool creates
+	Remote string   // the remote to register and set as origin
+	Args   []string // passed through to the tool, e.g. kumi's Go module path
+}
+
 // appScaffold maps an app type to the subcommand its tool uses to scaffold a
 // new project into a directory.
 var appScaffold = map[string]string{
@@ -23,10 +31,13 @@ var appScaffold = map[string]string{
 	"hachigo": "init",
 }
 
-// Add installs the app's scaffold tool and runs it to create the app under
-// src/apps/<name>/. extraArgs (e.g. the Go module path for kumi) are passed
-// through to the tool.
-func Add(dir, appType, name string, extraArgs ...string) (AddReport, error) {
+// installTool installs an app's scaffold tool. Tests replace it.
+var installTool = GoInstall
+
+// Add installs the app's scaffold tool, runs it to create the app outside the
+// workspace, makes sure the app is a git repo with the given origin, and registers
+// it as this workspace's target repo.
+func Add(dir, appType, name string, opts AddOptions) (AddReport, error) {
 	rep := AddReport{}
 	loaded, err := settings.LoadSettings(dir)
 	if err != nil {
@@ -40,65 +51,112 @@ func Add(dir, appType, name string, extraArgs ...string) (AddReport, error) {
 	if !ok {
 		return rep, fmt.Errorf("tomo add: unknown app type %q", appType)
 	}
+	if opts.Path == "" || opts.Remote == "" {
+		return rep, fmt.Errorf("tomo add: --path and --remote are required")
+	}
+	reg, err := repos.Load(dir, "tomo")
+	if err != nil {
+		return rep, err
+	}
+	if err := refuseSecondTarget(reg); err != nil {
+		return rep, err
+	}
+	if err := reg.Add(name, opts.Remote, ""); err != nil {
+		return rep, err
+	}
+	if err := reg.SetPath(name, opts.Path); err != nil {
+		return rep, err
+	}
+	dest, err := reg.Resolve(name)
+	if err != nil {
+		return rep, err
+	}
+	if _, err := os.Stat(dest); err == nil {
+		return rep, fmt.Errorf("tomo add: %s already exists — to use existing code, run `tomo repo add`", dest)
+	}
 
-	bin, err := GoInstall(installPath)
+	bin, err := installTool(installPath)
 	if err != nil {
 		return rep, fmt.Errorf("tomo add: install %s: %w", installPath, err)
 	}
-
-	outputDir := loaded.Effective.OutputDir
-	if outputDir == "" {
-		outputDir = "src"
+	parent := filepath.Dir(dest)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return rep, err
 	}
-	projectType := loaded.Effective.ProjectType
-	if projectType == "" {
-		projectType = "monorepo"
-	}
-
-	var outputAbs string
-	if filepath.IsAbs(outputDir) {
-		outputAbs = outputDir
-	} else {
-		outputAbs = filepath.Join(dir, outputDir)
-	}
-
-	var appsDir, nameOverride string
-	var repPath string
-	if projectType == "standard" {
-		// scaffold directly into outputDir: run the tool in its parent with
-		// the output dir's basename as the project name.
-		parent := filepath.Dir(outputAbs)
-		nm := filepath.Base(outputAbs)
-		if nm == "" || nm == "." || nm == string(filepath.Separator) {
-			return rep, fmt.Errorf("tomo add: invalid outputDir %q", outputDir)
-		}
-		if err := os.MkdirAll(parent, 0o755); err != nil {
-			return rep, err
-		}
-		appsDir = parent
-		nameOverride = nm
-		repPath = outputAbs
-	} else {
-		base := outputAbs
-		appsDir = filepath.Join(base, "apps")
-		if err := os.MkdirAll(appsDir, 0o755); err != nil {
-			return rep, err
-		}
-		repPath = filepath.Join(appsDir, name)
-	}
-
-	scaffoldName := name
-	if nameOverride != "" {
-		scaffoldName = nameOverride
-	}
-	args := append([]string{sub, scaffoldName}, extraArgs...)
-	if err := runCmd(appsDir, bin, args...); err != nil {
+	args := append([]string{sub, filepath.Base(dest)}, opts.Args...)
+	if err := runCmd(parent, bin, args...); err != nil {
 		return rep, fmt.Errorf("tomo add: %s %s: %w", appType, sub, err)
 	}
-
-	rep.Path = repPath
+	if _, err := os.Stat(filepath.Join(dest, ".git")); os.IsNotExist(err) {
+		if err := runCmd(dest, "git", "init", "--quiet"); err != nil {
+			return rep, fmt.Errorf("tomo add: git init: %w", err)
+		}
+	}
+	if err := runCmd(dest, "git", "remote", "add", "origin", opts.Remote); err != nil {
+		return rep, fmt.Errorf("tomo add: setting origin: %w", err)
+	}
+	if err := reg.Save(); err != nil {
+		return rep, err
+	}
+	rep.Path = dest
 	rep.Source = installPath
 	return rep, nil
+}
+
+func refuseSecondTarget(reg repos.Registry) error {
+	if names := reg.Names(); len(names) > 0 {
+		return fmt.Errorf("tomo: this workspace already targets %q, and a tomo workspace targets exactly one repo", names[0])
+	}
+	return nil
+}
+
+// RefuseSecondTarget returns an error if the workspace already has a target repo.
+func RefuseSecondTarget(root string) error {
+	reg, err := repos.Load(root, "tomo")
+	if err != nil {
+		return err
+	}
+	return refuseSecondTarget(reg)
+}
+
+// Target returns the workspace's one registered repo and its path on this machine.
+func Target(root string) (name, path string, err error) {
+	reg, err := repos.Load(root, "tomo")
+	if err != nil {
+		return "", "", err
+	}
+	names := reg.Names()
+	switch len(names) {
+	case 0:
+		return "", "", fmt.Errorf("tomo: no target repo — run `tomo add` for a new app, or `tomo repo add` for existing code")
+	case 1:
+	default:
+		return "", "", fmt.Errorf("tomo: a tomo workspace targets exactly one repo, but REPOS.json has %s", strings.Join(names, ", "))
+	}
+	path, err = reg.Resolve(names[0])
+	if err != nil {
+		return "", "", err
+	}
+	return names[0], path, nil
+}
+
+// OldAppsDir reports whether the workspace still has code under src/apps/ and no
+// target repo, from before code moved out of the workspace.
+func OldAppsDir(root string) bool {
+	reg, err := repos.Load(root, "tomo")
+	if err != nil || len(reg.Repos) > 0 {
+		return false
+	}
+	entries, err := os.ReadDir(filepath.Join(root, "src", "apps"))
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if e.Name() != ".gitkeep" && e.Name() != ".DS_Store" {
+			return true
+		}
+	}
+	return false
 }
 
 // GoToolBin returns the GOPATH/bin path for a tool import path (e.g.
