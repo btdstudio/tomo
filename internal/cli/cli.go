@@ -71,7 +71,7 @@ func PrintUsage() {
 Usage:
   tomo init [dir] [--no-git] [--force]   scaffold the ICM structure
   tomo update                             refresh managed files
-  tomo add kumi|hachigo <name> --path <p> --remote <url> [module]
+  tomo add kumi|hanga <name> --path <p> --remote <url> [module]
                                           scaffold an app outside the workspace and target it
   tomo status                             show the active change
   tomo settings                           show effective settings
@@ -472,7 +472,7 @@ func runDoctor(root string, args []string) int {
 	for name, path := range kumiPrereqs {
 		tools[name] = path
 	}
-	for _, appType := range []string{"kumi", "hachigo"} {
+	for _, appType := range []string{"kumi", "hanga"} {
 		if p, ok := loaded.Effective.AppSources[appType]; ok && p != "" {
 			tools[appType] = p
 		}
@@ -525,7 +525,7 @@ func runList(root string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	for _, appType := range []string{"kumi", "hachigo"} {
+	for _, appType := range []string{"kumi", "hanga"} {
 		path, ok := loaded.Effective.AppSources[appType]
 		if !ok || path == "" {
 			fmt.Printf("%-8s unknown\n", appType)

@@ -33,7 +33,7 @@ func DefaultSettings() Settings {
 		Gates:       "block",
 		ArtifactDir: state.DefaultArtifactDir,
 		IssuesDir:   "00_issues",
-		AppSources:  map[string]string{"kumi": "github.com/btdstudio/kumi/cmd/kumi", "hachigo": "github.com/btdstudio/hachigo/cmd/hachigo"},
+		AppSources:  map[string]string{"kumi": "github.com/btdstudio/kumi/cmd/kumi", "hanga": "github.com/btdstudio/hanga/cmd/hanga"},
 	}
 }
 

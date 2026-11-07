@@ -105,7 +105,7 @@ func TestAddRefusals(t *testing.T) {
 		t.Fatal(err)
 	}
 	second := filepath.Join(base, "d")
-	if _, err := Add(dir, "hachigo", "site", AddOptions{Path: second, Remote: remote}); err == nil || !strings.Contains(err.Error(), "exactly one repo") {
+	if _, err := Add(dir, "hanga", "site", AddOptions{Path: second, Remote: remote}); err == nil || !strings.Contains(err.Error(), "exactly one repo") {
 		t.Fatalf("second target err = %v", err)
 	}
 	if _, err := os.Stat(second); err == nil {
