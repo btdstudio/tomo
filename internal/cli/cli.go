@@ -10,11 +10,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/btdstudio/kiso/version"
 	"github.com/btdstudio/tomo/internal/icm"
 	"github.com/btdstudio/tomo/internal/issues"
 	"github.com/btdstudio/tomo/internal/settings"
 	"github.com/btdstudio/tomo/internal/state"
-	"github.com/btdstudio/tomo/internal/version"
 )
 
 // Run dispatches a helper subcommand and returns a process exit code.

@@ -1,19 +1,17 @@
-// Package settings owns Tomo's mergeable settings: global
-// (~/.config/tomo/settings.json) then project (.tomo/settings.json); the
-// project supersedes the global. Effective settings = defaults ← global ←
-// project.
+// Package settings defines tomo's settings shape and merges it through kiso:
+// effective settings = defaults ← global (~/.config/tomo/settings.json) ←
+// project (.tomo/settings.json).
 package settings
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
+	"strings"
 
+	core "github.com/btdstudio/kiso/settings"
 	"github.com/btdstudio/tomo/internal/state"
 )
 
-var VALID_GATES = []string{"block", "prompt", "auto"}
 var VALID_ISSUES = []string{"local"}
 var VALID_PROJECT_TYPES = []string{"monorepo", "standard"}
 
@@ -29,6 +27,16 @@ type Settings struct {
 	AppSources  map[string]string `json:"appSources"`
 }
 
+// Loaded is the result of LoadSettings.
+type Loaded = core.Loaded[Settings]
+
+var spec = core.Spec[Settings]{
+	Tool:     "tomo",
+	Defaults: DefaultSettings,
+	Apply:    apply,
+	Validate: validate,
+}
+
 func DefaultSettings() Settings {
 	return Settings{
 		BaseSource:  "", // default base requirement source: file | "issue:N" | "url:..."
@@ -42,53 +50,15 @@ func DefaultSettings() Settings {
 	}
 }
 
-func GlobalSettingsPath() string {
-	base := os.Getenv("XDG_CONFIG_HOME")
-	if base == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			base = ""
-		} else {
-			base = filepath.Join(home, ".config")
-		}
+func apply(s *Settings, key string, value any) {
+	if key == "appSources" {
+		s.AppSources = mergeStringMap(s.AppSources, appSourcesFromRaw(value))
+		return
 	}
-	return filepath.Join(base, "tomo", "settings.json")
-}
-
-func ProjectSettingsPath(root string) string {
-	return filepath.Join(state.Workspace(root), "settings.json")
-}
-
-// ReadIfExists parses a JSON object file, returning an empty map when absent.
-func ReadIfExists(file string) (map[string]any, error) {
-	data, err := os.ReadFile(file)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return map[string]any{}, nil
-		}
-		return nil, err
+	val, ok := value.(string)
+	if !ok {
+		return
 	}
-	var parsed any
-	if err := json.Unmarshal(data, &parsed); err != nil {
-		return nil, fmt.Errorf("tomo: cannot parse settings %s: %v", file, err)
-	}
-	m, ok := parsed.(map[string]any)
-	if !ok || m == nil {
-		return nil, fmt.Errorf("tomo: settings must be a JSON object: %s", file)
-	}
-	return m, nil
-}
-
-func contains(list []string, s string) bool {
-	for _, v := range list {
-		if v == s {
-			return true
-		}
-	}
-	return false
-}
-
-func stringField(s *Settings, key, val string) {
 	switch key {
 	case "baseSource":
 		s.BaseSource = val
@@ -107,48 +77,28 @@ func stringField(s *Settings, key, val string) {
 	}
 }
 
-// MergeSettings overlays the raw layers (global then project) over defaults.
-// Layers are raw JSON objects so a present-but-empty value still overrides,
-// matching the JS Object.assign semantics.
-func MergeSettings(layers ...map[string]any) (Settings, error) {
-	out := DefaultSettings()
-	for _, layer := range layers {
-		for key, value := range layer {
-			if value == nil {
-				continue
-			}
-			if key == "appSources" {
-				out.AppSources = mergeStringMap(out.AppSources, appSourcesFromRaw(value))
-				continue
-			}
-			if s, ok := value.(string); ok {
-				stringField(&out, key, s)
-			}
-		}
+func validate(s *Settings) error {
+	if err := core.CheckGates("tomo", s.Gates); err != nil {
+		return err
 	}
-	if !contains(VALID_GATES, out.Gates) {
-		return Settings{}, fmt.Errorf("tomo: invalid gates %q (expected %s)", out.Gates, join(VALID_GATES, "|"))
+	if !contains(VALID_ISSUES, s.Issues) {
+		fmt.Fprintf(os.Stderr, "tomo: invalid issues %q (expected %s); using \"local\"\n", s.Issues, strings.Join(VALID_ISSUES, "|"))
+		s.Issues = "local"
 	}
-	if !contains(VALID_ISSUES, out.Issues) {
-		fmt.Fprintf(os.Stderr, "tomo: invalid issues %q (expected %s); using \"local\"\n", out.Issues, join(VALID_ISSUES, "|"))
-		out.Issues = "local"
+	if !contains(VALID_PROJECT_TYPES, s.ProjectType) {
+		fmt.Fprintf(os.Stderr, "tomo: invalid projectType %q (expected %s); using \"monorepo\"\n", s.ProjectType, strings.Join(VALID_PROJECT_TYPES, "|"))
+		s.ProjectType = "monorepo"
 	}
-	if !contains(VALID_PROJECT_TYPES, out.ProjectType) {
-		fmt.Fprintf(os.Stderr, "tomo: invalid projectType %q (expected %s); using \"monorepo\"\n", out.ProjectType, join(VALID_PROJECT_TYPES, "|"))
-		out.ProjectType = "monorepo"
-	}
-	return out, nil
+	return nil
 }
 
-func join(list []string, sep string) string {
-	s := ""
-	for i, v := range list {
-		if i > 0 {
-			s += sep
+func contains(list []string, s string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
 		}
-		s += v
 	}
-	return s
+	return false
 }
 
 func mergeStringMap(base, next map[string]string) map[string]string {
@@ -176,25 +126,14 @@ func appSourcesFromRaw(v any) map[string]string {
 	return out
 }
 
-// Loaded is the result of LoadSettings.
-type Loaded struct {
-	Global    map[string]any
-	Project   map[string]any
-	Effective Settings
-}
+func GlobalSettingsPath() string { return spec.GlobalPath() }
 
-func LoadSettings(root string) (Loaded, error) {
-	global, err := ReadIfExists(GlobalSettingsPath())
-	if err != nil {
-		return Loaded{}, err
-	}
-	project, err := ReadIfExists(ProjectSettingsPath(root))
-	if err != nil {
-		return Loaded{}, err
-	}
-	effective, err := MergeSettings(global, project)
-	if err != nil {
-		return Loaded{}, err
-	}
-	return Loaded{Global: global, Project: project, Effective: effective}, nil
-}
+func ProjectSettingsPath(root string) string { return spec.ProjectPath(root) }
+
+// ReadIfExists parses a JSON object file, returning an empty map when absent.
+func ReadIfExists(file string) (map[string]any, error) { return spec.ReadIfExists(file) }
+
+// MergeSettings overlays the raw layers (global then project) over defaults.
+func MergeSettings(layers ...map[string]any) (Settings, error) { return spec.Merge(layers...) }
+
+func LoadSettings(root string) (Loaded, error) { return spec.Load(root) }
