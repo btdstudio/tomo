@@ -27,7 +27,7 @@ type AddOptions struct {
 // appScaffold maps an app type to the subcommand its tool uses to scaffold a
 // new project into a directory.
 var appScaffold = map[string]string{
-	"kumi":    "new",
+	"kumi":  "new",
 	"hanga": "init",
 }
 
