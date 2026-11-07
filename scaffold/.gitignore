@@ -1,5 +1,6 @@
 # Local to each checkout; the rest of .tomo/ is shared
 .tomo/active
+.tomo/paths.json
 .tomo/SLIP.md
 
 # OS noise

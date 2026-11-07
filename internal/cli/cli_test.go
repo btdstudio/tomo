@@ -1,12 +1,14 @@
 package cli
 
 import (
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/btdstudio/kiso/repos"
 	"github.com/btdstudio/tomo/internal/icm"
 	"github.com/btdstudio/tomo/internal/issues"
 	"github.com/btdstudio/tomo/internal/state"
@@ -195,5 +197,26 @@ func TestRunIssuesNewAndList(t *testing.T) {
 	all := issues.ListIssues(dir, "00_issues")
 	if len(all) != 1 || all[0].ID != 1 || all[0].Title != "Fix login" {
 		t.Fatalf("issues = %+v", all)
+	}
+}
+
+func TestEnvPrintsFlagsForRegisteredRepos(t *testing.T) {
+	root := workspace(t)
+	target := t.TempDir()
+	if code := repos.Run(root, "tomo", []string{"add", "app", "https://github.com/org/app", "--path", target}, os.Stdout, os.Stderr); code != 0 {
+		t.Fatalf("repo add = %d", code)
+	}
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	orig := os.Stdout
+	os.Stdout = w
+	code := runEnv(root)
+	os.Stdout = orig
+	w.Close()
+	out, _ := io.ReadAll(r)
+	if code != 0 || strings.TrimSpace(string(out)) != "--add-dir "+target {
+		t.Fatalf("code = %d, out = %q", code, out)
 	}
 }

@@ -35,6 +35,8 @@ tomo, which folds test authoring into the coder and adequacy into the reviewer.
 | `tomo gate <phase> <status> [--force]` | advance the active change's gate (earlier phases must be finished) |
 | `tomo reopen <phase> --reason <r>` | move back to a phase and clear later approvals |
 | `tomo issues new|list|show` | manage `00_issues/` |
+| `tomo repo add\|list\|path\|doctor` | manage the repos this workspace works with |
+| `tomo env` | print harness flags (`--add-dir <path>`) for this workspace's repos |
 | `tomo doctor [--install]` | check toolchain prerequisites |
 | `tomo list` | list installed tools + versions |
 | `tomo commit [git commit args]` | commit what's staged. Split work into reviewed micro-commits: propose the groups, stage one, commit it with a conventional message, repeat |
@@ -104,7 +106,8 @@ it like `git` or `gh`. Prefer `tomo <command>` over hand-editing `STATE.json` or
 ├── .gitattributes
 ├── STATE.json            # per-change phase, gates, sources (committed)
 ├── LOG.md                # gate history (committed)
-├── .tomo/                # settings + manifest (committed), active change (local)
+├── REPOS.json            # logical repos and remotes (committed)
+├── .tomo/                # settings + manifest (committed), active change + repo paths (local)
 ├── 00_issues/            # local issue store (<id>.md)
 ├── 01_planning/          # analyst + architect
 ├── 02_implementation/    # coder

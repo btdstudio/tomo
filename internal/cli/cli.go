@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/btdstudio/kiso/repos"
 	kiso "github.com/btdstudio/kiso/state"
 	"github.com/btdstudio/kiso/version"
 	"github.com/btdstudio/tomo/internal/icm"
@@ -52,6 +53,10 @@ func Run(args []string) int {
 		return runCommit(root, args[1:])
 	case "pr":
 		return runPR(args[1:])
+	case "repo":
+		return repos.Run(root, "tomo", args[1:], os.Stdout, os.Stderr)
+	case "env":
+		return runEnv(root)
 	default:
 		fmt.Fprintf(os.Stderr, "tomo: unknown command %q\n", args[0])
 		PrintUsage()
@@ -76,6 +81,7 @@ Usage:
   tomo gate <phase> <status> [--force]    advance the active change's gate
   tomo reopen <phase> --reason <r>        move back to a phase, clearing later approvals
   tomo issues new|list|show [args]        manage 00_issues/
+` + repos.Usage("tomo") + `  tomo env                                print harness flags for this workspace's repos
   tomo doctor [--install]                 check toolchain prerequisites
   tomo list                               list installed tools + versions
   tomo commit [git commit args]           commit what's staged, one micro-commit at a time
@@ -346,6 +352,17 @@ func runReopen(root string, args []string) int {
 	}
 	fmt.Printf("%s: %s = %s\n", st.Name, st.Phase, st.Status)
 	return 0
+}
+
+// runEnv prints harness flags for every registered repo. Unlike a zumen change,
+// which picks from many repos, a tomo workspace works on the repos it registers.
+func runEnv(root string) int {
+	reg, err := repos.Load(root, "tomo")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return repos.RunEnv(root, "tomo", reg.Names(), os.Stdout, os.Stderr)
 }
 
 func runIssues(root string, args []string) int {
