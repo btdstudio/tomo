@@ -25,6 +25,8 @@ package state
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/btdstudio/kiso/changelog"
+	"github.com/btdstudio/kiso/workspace"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -109,7 +111,7 @@ type stateFileOut struct {
 // project root (the ICM scaffold's 01_planning/specs/ convention).
 const DefaultArtifactDir = "01_planning/specs"
 
-func Workspace(root string) string { return filepath.Join(root, ".tomo") }
+func Workspace(root string) string { return workspace.Dir(root, "tomo") }
 
 func StatePath(root string) string { return filepath.Join(Workspace(root), "state.json") }
 
@@ -418,14 +420,5 @@ func SetGate(st *State, phase, status string) error {
 
 // AppendLog appends one timestamped line to .tomo/log.md.
 func AppendLog(root, line string) error {
-	if err := os.MkdirAll(Workspace(root), 0o755); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(LogPath(root), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	_, err = fmt.Fprintf(f, "- %s %s\n", isoMillis(Now()), line)
-	return err
+	return changelog.Append(LogPath(root), Now(), line)
 }
