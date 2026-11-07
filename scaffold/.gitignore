@@ -1,5 +1,6 @@
-# Per-project workspace state (regenerable, not committed)
-.tomo/
+# Local to each checkout; the rest of .tomo/ is shared
+.tomo/active
+.tomo/SLIP.md
 
 # OS noise
 .DS_Store

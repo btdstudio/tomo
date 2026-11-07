@@ -1,424 +1,292 @@
-// Package state owns the .tomo/ workspace contract: the state.json phase
-// machine, log.md changeset appends, SLIP.md handoff, and the specs dir.
+// Package state configures kiso's phase machine for tomo and migrates workspaces
+// that kept their state under .tomo/.
 //
-// It is a faithful port of src/lib/state.js. Command bodies reference this
-// contract (paths, schema, transitions) via the `tomo` binary so the SDD loop
-// behaves identically in every harness. Tests pin this exact behavior.
+// The loop is requirements → design → plan → implement. Implement is a run phase;
+// the rest are gated.
 //
 // Layout:
 //
-//	.tomo/state.json   phase machine: { change, updatedAt, changes } where
-//	                   changes maps each change folder to its own
-//	                   { phase, status, gates, sources } record — the single
-//	                   store, so swapping specs preserves every change's
-//	                   progress. The active machine is changes[change];
-//	                   LoadState resolves it into { phase, status, gates,
-//	                   sources, change, updatedAt }. Legacy files that still
-//	                   carry the machine at top level keep loading.
+//	STATE.json         phase machine: { schema, changes } maps each change folder
+//	                   to its own { phase, status, gates, sources, updatedAt }
+//	                   record, committed so approvals survive a clone
+//	LOG.md             one timestamped line per state change / gate (committed)
+//	.tomo/active       the active change's name; gitignored, because each checkout
+//	                   works on its own change
+//	.tomo/SLIP.md      handoff context for compact/resume (gitignored)
 //	01_planning/specs/ per-change folders: <id>-<slug>/requirements.md,
 //	                   design.md, tasks.json, plus ad-hoc outputs folded into
 //	                   the active change
-//	.tomo/log.md       one timestamped line per state change / gate
-//	.tomo/SLIP.md      handoff context for compact/resume
 package state
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/btdstudio/kiso/changelog"
-	"github.com/btdstudio/kiso/workspace"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strconv"
-	"strings"
 	"time"
+
+	kiso "github.com/btdstudio/kiso/state"
+	"github.com/btdstudio/kiso/workspace"
 )
 
-// The gated SDD phases in order, then the run phases. Later phases
-// (documentation) may be added without breaking the schema.
-var PHASES = []string{"requirements", "design", "plan", "implement"}
-
-// Per-phase gate status. "" = not started. Gated phases only.
-var GATE_STATES = []string{"", "draft", "await-approval", "approved"}
-
-// Run-phase status for `implement` (driven by the implement loop, not a gate).
-// "" = not started, "in-progress" = loop running or resumable, "complete" = done.
-var IMPLEMENT_STATES = []string{"", "in-progress", "complete"}
-
-// Now is the injectable clock used for timestamps (updatedAt and log lines).
-// Tests override it to make output deterministic.
-var Now = time.Now
-
-// isoMillis renders a time exactly as JavaScript's Date.prototype.toISOString
-// does: UTC with three-digit millisecond precision and a trailing 'Z'.
-func isoMillis(t time.Time) string {
-	return t.UTC().Format("2006-01-02T15:04:05.000Z")
-}
-
-// Gates is the per-phase gate map. Field order mirrors the JS insertion order
-// (PHASES order), so marshaling preserves byte-identical JSON.
-type Gates struct {
-	Requirements string `json:"requirements"`
-	Design       string `json:"design"`
-	Plan         string `json:"plan"`
-	Implement    string `json:"implement"`
-}
-
-// State is the resolved active machine (what LoadState returns).
-type State struct {
-	Phase     string
-	Status    string
-	Gates     Gates
-	Sources   []string
-	Change    string
-	UpdatedAt string
-}
-
-// changeRecord is the per-change phase-machine record stored in state.json.
-// Field order matches the JS record { phase, status, gates, sources }.
-type changeRecord struct {
-	Phase   string   `json:"phase"`
-	Status  string   `json:"status"`
-	Gates   Gates    `json:"gates"`
-	Sources []string `json:"sources"`
-}
-
-// stateFile is the on-disk state.json shape read by LoadState/ReadChanges. It
-// carries both the slim { change, updatedAt, changes } form and the legacy
-// top-level machine fields, so either shape unmarshals cleanly.
-type stateFile struct {
-	Change    string                   `json:"change"`
-	UpdatedAt string                   `json:"updatedAt"`
-	Changes   map[string]*changeRecord `json:"changes"`
-
-	// Legacy top-level machine (pre-`changes` files).
-	Phase   string   `json:"phase"`
-	Status  string   `json:"status"`
-	Gates   Gates    `json:"gates"`
-	Sources []string `json:"sources"`
-}
-
-// stateFileOut is the slim shape SaveState writes: exactly
-// { change, updatedAt, changes }.
-type stateFileOut struct {
-	Change    string                   `json:"change"`
-	UpdatedAt string                   `json:"updatedAt"`
-	Changes   map[string]*changeRecord `json:"changes"`
-}
+// Machine is the SDD loop.
+var Machine = kiso.Machine{Tool: "tomo", Phases: []kiso.Phase{
+	{Name: "requirements", Kind: kiso.Gated},
+	{Name: "design", Kind: kiso.Gated},
+	{Name: "plan", Kind: kiso.Gated},
+	{Name: "implement", Kind: kiso.Run},
+}}
 
 // DefaultArtifactDir is where per-change spec artifacts live, relative to the
 // project root (the ICM scaffold's 01_planning/specs/ convention).
 const DefaultArtifactDir = "01_planning/specs"
 
-func Workspace(root string) string { return workspace.Dir(root, "tomo") }
+// Now is the injectable clock used for timestamps (updatedAt and log lines).
+// Tests override it to make output deterministic.
+var Now = time.Now
 
-func StatePath(root string) string { return filepath.Join(Workspace(root), "state.json") }
-
-func SpecsDir(root, artifactDir string) string {
+func store(artifactDir string) kiso.Store {
 	if artifactDir == "" {
 		artifactDir = DefaultArtifactDir
 	}
-	return filepath.Join(root, filepath.FromSlash(artifactDir))
+	return kiso.Store{
+		Machine:   Machine,
+		SpecsDir:  filepath.FromSlash(artifactDir),
+		Commit:    true,
+		Now:       func() time.Time { return Now() },
+		Preflight: refuseOldState,
+	}
 }
+
+type (
+	// State is one change's machine.
+	State = kiso.Change
+	// KnownChange is one change folder annotated with any recorded progress.
+	KnownChange = kiso.KnownChange
+)
+
+func Workspace(root string) string  { return workspace.Dir(root, "tomo") }
+func StatePath(root string) string  { return store("").StatePath(root) }
+func ActivePath(root string) string { return workspace.ActivePath(root, "tomo") }
+func LogPath(root string) string    { return store("").LogPath(root) }
+func SlipPath(root string) string   { return filepath.Join(Workspace(root), "SLIP.md") }
+
+func SpecsDir(root, artifactDir string) string { return store(artifactDir).SpecsPath(root) }
 
 // ChangeDir returns the path to one change folder. An empty change resolves to
 // the specs base itself (a guard for ad-hoc outputs when nothing is active).
 func ChangeDir(root, change, artifactDir string) string {
-	if change != "" {
-		return filepath.Join(SpecsDir(root, artifactDir), change)
-	}
-	return SpecsDir(root, artifactDir)
+	return store(artifactDir).ChangeDir(root, change)
 }
-
-func LogPath(root string) string { return filepath.Join(Workspace(root), "log.md") }
-
-func SlipPath(root string) string { return filepath.Join(Workspace(root), "SLIP.md") }
 
 // ArtifactPath is an artifact inside a specific change folder.
 func ArtifactPath(root, change, name, artifactDir string) string {
 	return filepath.Join(ChangeDir(root, change, artifactDir), name)
 }
 
-var changeIDRe = regexp.MustCompile(`^(\d+)-`)
+// NextChangeId is the next sequential change id.
+func NextChangeId(root, artifactDir string) int { return store(artifactDir).NextID(root) }
 
-// changeNameRe is the strict grammar for an accepted change folder name: a
-// numeric id, a hyphen, then the kebab-case slug Slugify produces. SwitchTo
-// requires this so a name can never escape 01_planning/specs via `..` or a
-// separator.
-var changeNameRe = regexp.MustCompile(`^(\d+)-[a-z0-9]+(?:-[a-z0-9]+)*$`)
+// Slugify lowercases to a short kebab-case slug.
+func Slugify(text string) string { return kiso.Slugify(text) }
 
-// NextChangeId is the next sequential change id: highest numeric `<id>-` prefix
-// under the artifact dir + 1.
-func NextChangeId(root, artifactDir string) int {
-	entries, err := os.ReadDir(SpecsDir(root, artifactDir))
-	if err != nil {
-		return 1
-	}
-	max := 0
-	for _, e := range entries {
-		if m := changeIDRe.FindStringSubmatch(e.Name()); m != nil {
-			if n, err := strconv.Atoi(m[1]); err == nil && n > max {
-				max = n
-			}
-		}
-	}
-	return max + 1
-}
+// DefaultState is the machine when nothing is recorded.
+func DefaultState() State { return kiso.NewChange("") }
 
-var slugNonAlnum = regexp.MustCompile(`[^a-z0-9]+`)
+// ReadActive returns the active change's name ("" when none is set).
+func ReadActive(root string) (string, error) { return workspace.ReadActive(root, "tomo") }
 
-// Slugify lowercases to a short kebab-case slug so change folders read as
-// <id>-<slug>.
-func Slugify(text string) string {
-	s := strings.ToLower(text)
-	s = slugNonAlnum.ReplaceAllString(s, "-")
-	s = strings.Trim(s, "-")
-	r := []rune(s)
-	if len(r) > 40 {
-		s = string(r[:40])
-	}
-	return s
-}
+// LoadState resolves the active machine.
+func LoadState(root string) (State, error) { return store("").Load(root) }
 
-func DefaultState() State {
-	return State{
-		Phase:   "",
-		Status:  "",
-		Gates:   Gates{},
-		Sources: []string{},
-		Change:  "",
-	}
-}
+// SaveState writes the change's record and makes it the active change.
+func SaveState(root string, st *State) error { return store("").Save(root, st) }
 
-func normalizeSources(s []string) []string {
-	if s == nil {
-		return []string{}
-	}
-	return s
-}
+// ReadChanges returns the recorded changes.
+func ReadChanges(root string) (map[string]*State, error) { return store("").ReadChanges(root) }
 
-// LoadState resolves the active machine. It returns DefaultState when no
-// state.json exists, and errors when the file cannot be parsed.
-func LoadState(root string) (State, error) {
-	p := StatePath(root)
-	data, err := os.ReadFile(p)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return DefaultState(), nil
-		}
-		return State{}, fmt.Errorf("tomo: cannot read %s: %v", p, err)
-	}
-	var sf stateFile
-	if err := json.Unmarshal(data, &sf); err != nil {
-		return State{}, fmt.Errorf("tomo: cannot parse %s: %v", p, err)
-	}
-
-	st := DefaultState()
-	// Legacy top-level machine fields (absent in the slim shape).
-	st.Phase = sf.Phase
-	st.Status = sf.Status
-	st.Gates = sf.Gates
-	st.Sources = normalizeSources(sf.Sources)
-	st.Change = sf.Change
-	st.UpdatedAt = sf.UpdatedAt
-
-	// The active change's record under `changes` is the source of truth
-	// (empty change resolves to the changes[""] record).
-	if rec, ok := sf.Changes[sf.Change]; ok && rec != nil {
-		if rec.Phase != "" {
-			st.Phase = rec.Phase
-		}
-		if rec.Status != "" {
-			st.Status = rec.Status
-		}
-		st.Gates = rec.Gates
-		if rec.Sources != nil {
-			st.Sources = append([]string{}, rec.Sources...)
-		}
-	}
-	return st, nil
-}
-
-// SaveState stamps updatedAt and writes the slim { change, updatedAt, changes }
-// shape, preserving every recorded change's record.
-func SaveState(root string, st *State) error {
-	st.UpdatedAt = isoMillis(Now())
-	if err := os.MkdirAll(Workspace(root), 0o755); err != nil {
-		return err
-	}
-	changes, err := ReadChanges(root)
-	if err != nil {
-		return err
-	}
-	changes[st.Change] = &changeRecord{
-		Phase:   st.Phase,
-		Status:  st.Status,
-		Gates:   st.Gates,
-		Sources: normalizeSources(st.Sources),
-	}
-	out := stateFileOut{
-		Change:    st.Change,
-		UpdatedAt: st.UpdatedAt,
-		Changes:   changes,
-	}
-	buf, err := json.MarshalIndent(out, "", "  ")
-	if err != nil {
-		return err
-	}
-	buf = append(buf, '\n')
-	return os.WriteFile(StatePath(root), buf, 0o644)
-}
-
-// ReadChanges returns the per-change phase-machine records in state.json.
-// It returns an empty map (and no error) when the file is absent. A corrupt
-// or unreadable file is a hard error so callers cannot silently discard
-// recorded change history.
-func ReadChanges(root string) (map[string]*changeRecord, error) {
-	p := StatePath(root)
-	data, err := os.ReadFile(p)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return map[string]*changeRecord{}, nil
-		}
-		return nil, fmt.Errorf("tomo: cannot read %s: %v", p, err)
-	}
-	var sf stateFile
-	if err := json.Unmarshal(data, &sf); err != nil {
-		return nil, fmt.Errorf("tomo: cannot parse %s: %v", p, err)
-	}
-	if sf.Changes == nil {
-		return map[string]*changeRecord{}, nil
-	}
-	return sf.Changes, nil
-}
-
-// KnownChange is one change folder annotated with any recorded progress.
-type KnownChange struct {
-	Name   string `json:"name"`
-	ID     int    `json:"id"`
-	Phase  string `json:"phase"`
-	Status string `json:"status"`
-	Gates  Gates  `json:"gates"`
-}
-
-// KnownChanges lists the numbered folders under the artifact dir (default
-// 01_planning/specs) sorted by id.
+// KnownChanges lists the numbered folders under the artifact dir, sorted by id.
 func KnownChanges(root, artifactDir string) ([]KnownChange, error) {
-	changes, err := ReadChanges(root)
-	if err != nil {
-		return nil, err
-	}
-	out := []KnownChange{}
-	entries, err := os.ReadDir(SpecsDir(root, artifactDir))
-	if err != nil {
-		return out, nil
-	}
-	for _, e := range entries {
-		name := e.Name()
-		m := changeIDRe.FindStringSubmatch(name)
-		if m == nil {
-			continue
-		}
-		id, _ := strconv.Atoi(m[1])
-		rec := changes[name]
-		kc := KnownChange{Name: name, ID: id, Gates: Gates{}}
-		if rec != nil {
-			kc.Phase = rec.Phase
-			kc.Status = rec.Status
-			kc.Gates = rec.Gates
-		}
-		out = append(out, kc)
-	}
-	// os.ReadDir already returns names sorted; the numeric id sort is a no-op
-	// for well-formed <id>- folders but keep it explicit for safety.
-	for i := 1; i < len(out); i++ {
-		for j := i; j > 0 && out[j-1].ID > out[j].ID; j-- {
-			out[j-1], out[j] = out[j], out[j-1]
-		}
-	}
-	return out, nil
+	return store(artifactDir).Known(root)
 }
 
-// SwitchTo points the workspace at a different change folder and resumes its
-// phase machine. The target folder must exist under the artifact dir and match
-// the strict change-name grammar (no `..`, no separators, no symlinks).
+// SwitchTo points the workspace at a different change folder.
 func SwitchTo(root, name, artifactDir string) (State, error) {
-	if !changeNameRe.MatchString(name) {
-		return State{}, fmt.Errorf(`tomo: unknown change "%s" — run /tomo switch to list specs`, name)
+	return store(artifactDir).Switch(root, name)
+}
+
+// SetGate starts the given phase and sets its status.
+func SetGate(st *State, phase, status, reason string) error {
+	return Machine.SetGate(st, phase, status, reason)
+}
+
+// CheckGate reports whether setting phase to status respects the loop.
+func CheckGate(st State, phase, status string) error { return Machine.CheckGate(st, phase, status) }
+
+// SeedChange creates a change folder and records its initial machine, making it
+// the active change. Sources are committed with it, so a clone has what the record
+// points at.
+func SeedChange(root, name, artifactDir string, sources []string) (State, error) {
+	return store(artifactDir).Seed(root, name, kiso.SeedOptions{Sources: sources, Paths: sources})
+}
+
+// AdvanceGate sets a gate on the active change, logs it with any notes, and
+// commits.
+func AdvanceGate(root, artifactDir, phase, status, reason string, notes ...string) (State, error) {
+	return store(artifactDir).Advance(root, phase, status, reason, notes...)
+}
+
+// Reopen moves the active change back to a phase, logs it and commits.
+func Reopen(root, artifactDir, phase, reason string) (State, error) {
+	return store(artifactDir).Reopen(root, phase, reason)
+}
+
+// CloseChange closes a change by name, logs it and commits.
+func CloseChange(root, artifactDir, name, reason string) (State, error) {
+	return store(artifactDir).CloseChange(root, name, reason)
+}
+
+// AppendLog appends one timestamped line to LOG.md.
+func AppendLog(root, line string) error { return store("").Log(root, line) }
+
+func oldStatePath(root string) string { return filepath.Join(Workspace(root), "state.json") }
+func oldLogPath(root string) string   { return filepath.Join(Workspace(root), "log.md") }
+
+func refuseOldLayout(root string) error {
+	old := filepath.Join(Workspace(root), "specs")
+	if _, err := os.Stat(old); err == nil {
+		return fmt.Errorf("tomo: %s is from an earlier layout that this version doesn't support — run `tomo init` in a new workspace", old)
 	}
-	dir := ChangeDir(root, name, artifactDir)
-	info, err := os.Lstat(dir)
-	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return State{}, fmt.Errorf(`tomo: unknown change "%s" — run /tomo switch to list specs`, name)
+	return nil
+}
+
+// refuseOldState stops a workspace with state under .tomo/ from silently looking
+// empty.
+func refuseOldState(root string) error {
+	if err := refuseOldLayout(root); err != nil {
+		return err
 	}
-	st := DefaultState()
-	st.Change = name
-	changes, err := ReadChanges(root)
+	if _, err := os.Stat(oldStatePath(root)); err == nil {
+		return fmt.Errorf("tomo: found old %s — run `tomo update` to move it to STATE.json", oldStatePath(root))
+	}
+	return nil
+}
+
+// MigrateOldState moves .tomo/state.json and .tomo/log.md to a committed
+// STATE.json and LOG.md at the workspace root, and the active change to
+// .tomo/active. It returns whether there was anything to move. Older files that
+// keep the active machine at the top level are carried over too.
+func MigrateOldState(root string) (bool, error) {
+	if err := refuseOldLayout(root); err != nil {
+		return false, err
+	}
+	data, err := os.ReadFile(oldStatePath(root))
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
 	if err != nil {
-		return State{}, err
+		return false, fmt.Errorf("tomo: cannot read %s: %v", oldStatePath(root), err)
 	}
-	if rec := changes[name]; rec != nil {
-		if rec.Phase != "" {
-			st.Phase = rec.Phase
-		}
-		if rec.Status != "" {
-			st.Status = rec.Status
-		}
-		st.Gates = rec.Gates
-		if rec.Sources != nil {
-			st.Sources = append([]string{}, rec.Sources...)
-		}
+	var old struct {
+		kiso.Change
+		Active  string                  `json:"change"`
+		Changes map[string]*kiso.Change `json:"changes"`
 	}
-	if err := SaveState(root, &st); err != nil {
-		return State{}, err
+	if err := json.Unmarshal(data, &old); err != nil {
+		return false, fmt.Errorf("tomo: cannot parse %s: %v", oldStatePath(root), err)
 	}
-	return st, nil
-}
-
-// SetGate advances the phase machine: starts the given phase and sets its
-// status. Implement is a run phase and uses IMPLEMENT_STATES; gated phases use
-// GATE_STATES. Does not enforce order (the gates do), but validates names.
-func SetGate(st *State, phase, status string) error {
-	found := false
-	for _, p := range PHASES {
-		if p == phase {
-			found = true
-			break
+	if err := refuseRecordedState(root); err != nil {
+		return false, err
+	}
+	changes := map[string]*kiso.Change{}
+	for name, c := range old.Changes {
+		if name != "" && c != nil {
+			changes[name] = c
 		}
 	}
-	if !found {
-		return fmt.Errorf("unknown phase: %s", phase)
+	if old.Active != "" && changes[old.Active] == nil {
+		top := old.Change
+		changes[old.Active] = &top
 	}
-	var allowed []string
-	label := "gate status"
-	if phase == "implement" {
-		allowed = IMPLEMENT_STATES
-		label = "implement status"
-	} else {
-		allowed = GATE_STATES
-	}
-	for _, s := range allowed {
-		if s == status {
-			st.Phase = phase
-			st.Status = status
-			switch phase {
-			case "requirements":
-				st.Gates.Requirements = status
-			case "design":
-				st.Gates.Design = status
-			case "plan":
-				st.Gates.Plan = status
-			case "implement":
-				st.Gates.Implement = status
+	for _, c := range changes {
+		if c.UpdatedAt == "" {
+			c.UpdatedAt = old.UpdatedAt
+		}
+		for phase, status := range c.Gates {
+			if status == "" {
+				delete(c.Gates, phase)
 			}
-			return nil
+		}
+		if c.Gates == nil {
+			c.Gates = map[string]string{}
+		}
+		if c.Sources == nil {
+			c.Sources = []string{}
 		}
 	}
-	return fmt.Errorf("unknown %s: %s", label, status)
+	buf, err := json.MarshalIndent(map[string]any{"schema": kiso.Schema, "changes": changes}, "", "  ")
+	if err != nil {
+		return false, err
+	}
+	if err := os.WriteFile(StatePath(root), append(buf, '\n'), 0o644); err != nil {
+		return false, err
+	}
+	if err := moveLog(root); err != nil {
+		return false, err
+	}
+	if old.Active != "" {
+		if err := workspace.WriteActive(root, "tomo", old.Active); err != nil {
+			return false, err
+		}
+	}
+	if err := os.Remove(oldStatePath(root)); err != nil {
+		return false, err
+	}
+	return true, AppendLog(root, "migrated from .tomo/state.json")
 }
 
-// AppendLog appends one timestamped line to .tomo/log.md.
-func AppendLog(root, line string) error {
-	return changelog.Append(LogPath(root), Now(), line)
+// refuseRecordedState protects a STATE.json that already holds changes from being
+// replaced by a migration.
+func refuseRecordedState(root string) error {
+	data, err := os.ReadFile(StatePath(root))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var current struct {
+		Changes map[string]json.RawMessage `json:"changes"`
+	}
+	if err := json.Unmarshal(data, &current); err != nil {
+		return fmt.Errorf("tomo: cannot parse %s: %v", StatePath(root), err)
+	}
+	if len(current.Changes) > 0 {
+		return fmt.Errorf("tomo: both %s and %s hold changes — keep one and remove the other", StatePath(root), oldStatePath(root))
+	}
+	return nil
+}
+
+// moveLog appends the old log to LOG.md, then removes it.
+func moveLog(root string) error {
+	data, err := os.ReadFile(oldLogPath(root))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(LogPath(root), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Remove(oldLogPath(root))
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/btdstudio/kiso/version"
 	"github.com/btdstudio/tomo/internal/cli"
 	"github.com/btdstudio/tomo/internal/icm"
+	"github.com/btdstudio/tomo/internal/state"
 )
 
 func main() {
@@ -75,6 +76,14 @@ func runInit(args []string) int {
 }
 
 func runUpdate() int {
+	migrated, err := state.MigrateOldState(".")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	if migrated {
+		fmt.Println("moved .tomo/state.json and .tomo/log.md to STATE.json and LOG.md — review and commit them")
+	}
 	rep, err := icm.Update(".")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

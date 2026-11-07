@@ -28,11 +28,15 @@ go install github.com/btdstudio/tomo/cmd/tomo@latest
 | `tomo add hachigo <name>` | scaffold a [hachigo site](https://github.com/btdstudio/hachigo) (location from `.tomo/settings.json`: `outputDir` + `projectType`) |
 | `tomo status` | show the active change |
 | `tomo settings` | show/merge settings |
-| `tomo switch <change>` | switch the active change |
+| `tomo switch [--all] [<change>]` | list changes, or switch the active change |
+| `tomo change new <title> [--issue <id>]` | create a change + issue + switch |
+| `tomo change close <change> --reason <r>` | close a change |
+| `tomo gate <phase> <status> [--force]` | advance the active change's gate |
+| `tomo reopen <phase> --reason <r>` | move back to a phase and clear later approvals |
 | `tomo issues new\|list\|show` | manage `00_issues/` |
 | `tomo doctor [--install]` | check toolchain prerequisites |
 | `tomo list` | list installed tools + versions |
-| `tomo commit` | stage all + commit (conventional) |
+| `tomo commit [git commit args]` | commit what's staged, one micro-commit at a time |
 | `tomo pr [title]` | open a pull request via `gh` |
 | `tomo help` | usage |
 
@@ -46,13 +50,18 @@ A change flows through four gated phases, each owned by a persona:
 4. **implement** (coder) — execute tasks one at a time, with tests.
 
 `review` and `security` are read-only passes after implement; `qa` owns the
-testing stage. Each phase stops at a gate for your approval.
+testing stage. Each phase stops at a gate for your approval. With the default
+`gates: block` setting, `tomo gate` refuses a phase until the earlier ones are
+finished; `--force` overrides this and records it in `LOG.md`. State changes
+commit `STATE.json` and `LOG.md` for you, without pushing.
 
 ## The workspace
 
 ```
 ├── AGENTS.md          root map + routing table + command list
-├── .tomo/             workspace state (settings, state, log, manifest)
+├── STATE.json         per-change phase, gates, sources (committed)
+├── LOG.md             gate history (committed)
+├── .tomo/             settings + manifest (committed), active change (local)
 ├── 00_issues/         local issue store (<id>.md)
 ├── 01_planning/       analyst + architect (specs, personas, templates)
 ├── 02_implementation/ coder

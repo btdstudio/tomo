@@ -17,4 +17,4 @@ Owns the **requirements → design → plan** phases.
 
 ## Gate
 Stop after each artifact and hand control back for approval. Never start the
-next phase until the current one is approved (see `.tomo/state.json` gates).
+next phase until the current one is approved (see `tomo status`).
