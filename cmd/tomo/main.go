@@ -104,7 +104,7 @@ func runUpdate() int {
 }
 
 func runAdd(args []string) int {
-	usage := "usage: tomo add kumi|hachigo <name> --path <dir> --remote <url> [module-path]"
+	usage := "usage: tomo add kumi|hanga <name> --path <dir> --remote <url> [module-path]"
 	var pos []string
 	opts := icm.AddOptions{}
 	for i := 0; i < len(args); i++ {

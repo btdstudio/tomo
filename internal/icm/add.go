@@ -28,7 +28,7 @@ type AddOptions struct {
 // new project into a directory.
 var appScaffold = map[string]string{
 	"kumi":    "new",
-	"hachigo": "init",
+	"hanga": "init",
 }
 
 // installTool installs an app's scaffold tool. Tests replace it.
@@ -45,7 +45,7 @@ func Add(dir, appType, name string, opts AddOptions) (AddReport, error) {
 	}
 	installPath, ok := loaded.Effective.AppSources[appType]
 	if !ok || installPath == "" {
-		return rep, fmt.Errorf("tomo add: unknown app type %q (known: kumi, hachigo)", appType)
+		return rep, fmt.Errorf("tomo add: unknown app type %q (known: kumi, hanga)", appType)
 	}
 	sub, ok := appScaffold[appType]
 	if !ok {

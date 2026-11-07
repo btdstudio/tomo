@@ -25,7 +25,7 @@ go install github.com/btdstudio/tomo/cmd/tomo@latest
 | `tomo init [dir]` | scaffold the ICM structure |
 | `tomo update` | refresh managed files to the installed version |
 | `tomo add kumi <name> --path <dir> --remote <url> [module-path]` | scaffold a [kumi Go+HTMX app](https://github.com/btdstudio/kumi) outside the workspace and make it the target repo |
-| `tomo add hachigo <name> --path <dir> --remote <url>` | scaffold a [hachigo site](https://github.com/btdstudio/hachigo) outside the workspace and make it the target repo |
+| `tomo add hanga <name> --path <dir> --remote <url>` | scaffold a [hanga site](https://github.com/btdstudio/hanga) outside the workspace and make it the target repo |
 | `tomo status` | show the active change |
 | `tomo settings` | show/merge settings |
 | `tomo switch [--all] [<change>]` | list changes, or switch the active change |

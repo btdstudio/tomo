@@ -33,7 +33,7 @@ again against the fixed code.
 | `tomo init [dir]` | scaffold this ICM structure |
 | `tomo update` | refresh managed files to the installed version |
 | `tomo add kumi <name> --path <dir> --remote <url> [module-path]` | scaffold a kumi Go+HTMX app outside the workspace and make it the target repo |
-| `tomo add hachigo <name> --path <dir> --remote <url>` | scaffold a hachigo site outside the workspace and make it the target repo |
+| `tomo add hanga <name> --path <dir> --remote <url>` | scaffold a hanga site outside the workspace and make it the target repo |
 | `tomo status` | show the active change's phase/status |
 | `tomo settings` | show/merge settings |
 | `tomo switch [--all] [<change>]` | list changes (`--all` includes closed ones), or switch the active change |
