@@ -1,10 +1,9 @@
 # Tomo (友) 🤝 — folder-driven AI SDLC toolset
 
 Tomo scaffolds and maintains an Interpretable Context Methodology (ICM)
-workspace: a folder structure that drives a spec-first software development
-loop — `requirements → design → plan → implement`, with review and security
-passes — for any AI harness, or none. The filesystem is the architecture; no
-framework or runtime is required after scaffold.
+workspace: a folder structure that takes one change in one repo from a ticket to a
+pull request, through a spec-first loop, for any AI harness or none. The filesystem
+is the architecture; no framework or runtime is required after scaffold.
 
 ## Attribution
 
@@ -32,7 +31,7 @@ go install github.com/btdstudio/tomo/cmd/tomo@latest
 | `tomo change new <title> [--issue <id>]` | create a change + native ticket + switch |
 | `tomo change new --from <ticket.md>` | start a change from a planned ticket |
 | `tomo change close <change> --reason <r>` | close a change |
-| `tomo gate <phase> <status> [--force]` | advance the active change's gate |
+| `tomo gate <phase> <status> [--reason <r>] [--force]` | advance the active change's gate |
 | `tomo reopen <phase> --reason <r>` | move back to a phase and clear later approvals |
 | `tomo issues new\|list\|show` | manage the tickets in `00_issues/` |
 | `tomo repo add\|list\|path\|doctor` | manage this workspace's one target repo |
@@ -64,7 +63,8 @@ serious finding loops back with `tomo reopen implement`, which clears the approv
 after it.
 
 State changes commit `STATE.json` and `LOG.md` for you, without pushing, and gates
-also commit the change's spec folder.
+also commit the change's spec folder. `tomo commit` and `tomo pr` act on the target
+repo.
 
 ## The workspace
 
@@ -84,6 +84,39 @@ code. Keep each workspace in its own git repo.
 └── 04_refactoring/    reviewer + security
 ```
 
+## Getting started
+
+```sh
+tomo init ../workspaces/my-app
+cd ../workspaces/my-app
+tomo repo add my-app git@github.com:me/my-app.git --path ~/source/my-app
+git add -A && git commit -m "chore: scaffold workspace"
+tomo change new "Add password reset"
+eval claude $(tomo env)
+```
+
+For a new app, `tomo add kumi my-app --path ~/source/my-app --remote <url>` scaffolds
+it and registers it instead.
+
+## Tickets
+
+`00_issues/` holds tickets in a schema shared with
+[zumen](https://github.com/btdstudio/zumen), through
+[kiso](https://github.com/btdstudio/kiso). A ticket created here gets an `N-0001` id.
+One planned elsewhere comes in as a snapshot:
+
+```sh
+tomo change new --from ../planning/specs/1-release/tickets/S-0014.md
+```
+
+It has to be ready or published, and land in this workspace's target repo. If it's been
+published, the analyst reads the live item first, following `01_planning/sync.md`, and
+requirements become a confirmation of what was already approved. It's still a gate,
+because tomo approves something zumen didn't: how this ticket lands in this repo.
+
+On ship, `tomo status` suggests a branch that includes the ticket's id, and `tomo pr`
+links the ticket, its external ids, spec and ADRs. Neither tool needs the other to run.
+
 ## Development
 
 ```sh
@@ -92,4 +125,5 @@ go test ./...                 # all tests (content/golden/placement)
 go test ./internal/icm -update # regenerate golden fixtures
 ```
 
-Runtime: Go >= 1.22, standard library only.
+Runtime: Go >= 1.22, standard library only, plus the first-party
+[kiso](https://github.com/btdstudio/kiso) core.
