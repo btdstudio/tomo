@@ -29,17 +29,18 @@ go install github.com/btdstudio/tomo/cmd/tomo@latest
 | `tomo status` | show the active change |
 | `tomo settings` | show/merge settings |
 | `tomo switch [--all] [<change>]` | list changes, or switch the active change |
-| `tomo change new <title> [--issue <id>]` | create a change + issue + switch |
+| `tomo change new <title> [--issue <id>]` | create a change + native ticket + switch |
+| `tomo change new --from <ticket.md>` | start a change from a planned ticket |
 | `tomo change close <change> --reason <r>` | close a change |
 | `tomo gate <phase> <status> [--force]` | advance the active change's gate |
 | `tomo reopen <phase> --reason <r>` | move back to a phase and clear later approvals |
-| `tomo issues new\|list\|show` | manage `00_issues/` |
+| `tomo issues new\|list\|show` | manage the tickets in `00_issues/` |
 | `tomo repo add\|list\|path\|doctor` | manage this workspace's one target repo |
 | `tomo env` | print harness flags for the target repo |
 | `tomo doctor [--install]` | check toolchain prerequisites |
 | `tomo list` | list installed tools + versions |
 | `tomo commit [git commit args]` | commit what's staged in the target repo, one micro-commit at a time |
-| `tomo pr [title]` | open a pull request for the target repo |
+| `tomo pr [title]` | open a pull request for the target repo, linking the ticket |
 | `tomo help` | usage |
 
 ## The loop
@@ -54,7 +55,7 @@ A change flows through nine phases, each owned by a persona:
 6. **test** (qa) — report pass/fail per acceptance criterion.
 7. **review** (reviewer) — correctness, scope and test adequacy.
 8. **security** (security) — vulnerabilities and security debt. Skippable, with a reason.
-9. **ship** — branch, micro-commits, and a PR linking the issue.
+9. **ship** — a branch, micro-commits, and a PR linking the ticket.
 
 Implement and ship are run phases; the rest stop at a gate for your approval. With
 the default `gates: block` setting, `tomo gate` refuses a phase until the earlier ones
@@ -76,7 +77,7 @@ code. Keep each workspace in its own git repo.
 ├── LOG.md             gate history (committed)
 ├── REPOS.json         logical repos and remotes (committed)
 ├── .tomo/             settings + manifest (committed), active change + repo paths (local)
-├── 00_issues/         local issue store (<id>.md)
+├── 00_issues/         tickets (<ID>.md)
 ├── 01_planning/       analyst + architect (specs, personas, templates)
 ├── 02_implementation/ coder
 ├── 03_testing/        qa

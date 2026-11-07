@@ -119,25 +119,38 @@ func RefuseSecondTarget(root string) error {
 	return refuseSecondTarget(reg)
 }
 
-// Target returns the workspace's one registered repo and its path on this machine.
-func Target(root string) (name, path string, err error) {
+// TargetName returns the workspace's one registered repo. It doesn't need the repo
+// to be on this machine.
+func TargetName(root string) (string, error) {
 	reg, err := repos.Load(root, "tomo")
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 	names := reg.Names()
 	switch len(names) {
 	case 0:
-		return "", "", fmt.Errorf("tomo: no target repo — run `tomo add` for a new app, or `tomo repo add` for existing code")
+		return "", fmt.Errorf("tomo: no target repo — run `tomo add` for a new app, or `tomo repo add` for existing code")
 	case 1:
-	default:
-		return "", "", fmt.Errorf("tomo: a tomo workspace targets exactly one repo, but REPOS.json has %s", strings.Join(names, ", "))
+		return names[0], nil
 	}
-	path, err = reg.Resolve(names[0])
+	return "", fmt.Errorf("tomo: a tomo workspace targets exactly one repo, but REPOS.json has %s", strings.Join(names, ", "))
+}
+
+// Target returns the workspace's one registered repo and its path on this machine.
+func Target(root string) (name, path string, err error) {
+	name, err = TargetName(root)
 	if err != nil {
 		return "", "", err
 	}
-	return names[0], path, nil
+	reg, err := repos.Load(root, "tomo")
+	if err != nil {
+		return "", "", err
+	}
+	path, err = reg.Resolve(name)
+	if err != nil {
+		return "", "", err
+	}
+	return name, path, nil
 }
 
 // OldAppsDir reports whether the workspace still has code under src/apps/ and no

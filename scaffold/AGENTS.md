@@ -20,7 +20,8 @@ run phases (`in-progress`, then `complete`); the rest are gated.
 - **review** (reviewer) — correctness, scope and test adequacy. Read-only.
 - **security** (security) — vulnerabilities and security debt. Read-only. Skippable,
   with a reason.
-- **ship** — branch, micro-commits, and a PR linking the issue.
+- **ship** — a branch named as `tomo status` suggests, micro-commits, and `tomo pr`,
+  which links the ticket, its external id, and its spec and ADRs.
 
 A test failure, or a critical or high finding, loops back with
 `tomo reopen implement --reason <r>`. That clears test and review, which then run
@@ -37,17 +38,18 @@ again against the fixed code.
 | `tomo status` | show the active change's phase/status |
 | `tomo settings` | show/merge settings |
 | `tomo switch [--all] [<change>]` | list changes (`--all` includes closed ones), or switch the active change |
-| `tomo change new <title> [--issue <id>]` | create a change + issue + switch |
+| `tomo change new <title> [--issue <id>]` | create a change + native ticket + switch |
+| `tomo change new --from <ticket.md>` | start a change from a planned ticket |
 | `tomo change close <change> --reason <r>` | close a change |
 | `tomo gate <phase> <status> [--force]` | advance the active change's gate (earlier phases must be finished) |
 | `tomo reopen <phase> --reason <r>` | move back to a phase and clear later approvals |
-| `tomo issues new|list|show` | manage `00_issues/` |
+| `tomo issues new|list|show` | manage the tickets in `00_issues/` |
 | `tomo repo add\|list\|path\|doctor` | manage this workspace's one target repo |
 | `tomo env` | print harness flags (`--add-dir <path>`) for the target repo |
 | `tomo doctor [--install]` | check toolchain prerequisites |
 | `tomo list` | list installed tools + versions |
 | `tomo commit [git commit args]` | commit what's staged in the target repo. Split work into reviewed micro-commits: propose the groups, stage one, commit it with a conventional message, repeat |
-| `tomo pr [title]` | open a pull request for the target repo |
+| `tomo pr [title]` | open a pull request for the target repo, linking the ticket |
 | `tomo help` | usage |
 
 The folders/personas below describe *what* to do; `tomo` is a plain CLI — run
@@ -56,10 +58,12 @@ it like `git` or `gh`. Prefer `tomo <command>` over hand-editing `STATE.json` or
 
 ## How to start a change
 
-1. **Create a change** — `tomo change new "Title"`. This writes the issue
-   (`00_issues/<id>.md`), makes a `01_planning/specs/<n>-<slug>/` folder, seeds
-   `STATE.json`, and switches to it. Use `--issue <id>` for an existing issue.
-2. **Kick off** with a prompt like: *"Start the loop on `00_issues/1.md`."*
+1. **Create a change** — `tomo change new "Title"`. This writes a ticket
+   (`00_issues/N-0001.md`), makes a `01_planning/specs/<n>-<slug>/` folder, seeds
+   `STATE.json`, and switches to it. Use `--issue <id>` for a ticket already here, or
+   `--from <ticket.md>` for one planned elsewhere, which is copied in as a snapshot.
+   Register the target repo first.
+2. **Kick off** with a prompt like: *"Start the loop on `00_issues/N-0001.md`."*
 
 ## Routing table
 
@@ -78,7 +82,8 @@ it like `git` or `gh`. Prefer `tomo <command>` over hand-editing `STATE.json` or
 ## Naming conventions
 
 - Specs: `01_planning/specs/<n>-<slug>/requirements.md|design.md|tasks.json|test-results.md|code-review.md|security-review.md`
-- Issues: `00_issues/<id>.md`
+- Tickets: `00_issues/<ID>.md`: `N-0001` when native, like `S-0014` when planned elsewhere
+- PM tool instructions: `01_planning/sync.md`
 - Personas: `<stage>/personas/<name>.md`
 - Templates: `01_planning/templates/<artifact>.md`
 
@@ -120,7 +125,7 @@ it like `git` or `gh`. Prefer `tomo <command>` over hand-editing `STATE.json` or
 ├── LOG.md                # gate history (committed)
 ├── REPOS.json            # logical repos and remotes (committed)
 ├── .tomo/                # settings + manifest (committed), active change + repo paths (local)
-├── 00_issues/            # local issue store (<id>.md)
+├── 00_issues/            # tickets (<ID>.md)
 ├── 01_planning/          # analyst + architect
 ├── 02_implementation/    # coder
 ├── 03_testing/           # qa

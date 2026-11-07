@@ -4,109 +4,178 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/btdstudio/kiso/ticket"
 )
 
-func TestWriteNewIssueCreatesControlledFrontmatter(t *testing.T) {
+func TestNewCreatesValidNativeTicket(t *testing.T) {
 	root := t.TempDir()
-	created, err := WriteNewIssue(root, "", NewIssueOptions{Title: "Build the thing", Labels: []string{"docs", "ui"}, Body: "Wire up the store."})
+	created, err := New(root, "", NewOptions{Title: "Build: the thing", Repo: "app", Labels: []string{"docs", "ui"}, Body: "Wire up the store."})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if created.ID != 1 || created.Status != "open" || created.Title != "Build the thing" ||
-		!reflect.DeepEqual(created.Labels, []string{"docs", "ui"}) || created.Body != "Wire up the store." {
+	if created.ID != "N-0001" || created.Status != ticket.StatusDraft || created.Type != ticket.Task {
 		t.Fatalf("created = %+v", created)
 	}
-	if !strings.HasSuffix(created.Path, filepath.Join("issues", "1.md")) {
+	if !strings.HasSuffix(created.Path, filepath.Join("00_issues", "N-0001.md")) {
 		t.Fatalf("path = %q", created.Path)
 	}
-	saved, _ := os.ReadFile(created.Path)
-	want := "---\nid: 1\nstatus: open\ntitle: Build the thing\nlabels: [docs, ui]\n---\n\nWire up the store.\n"
-	if string(saved) != want {
-		t.Fatalf("saved = %q, want %q", saved, want)
-	}
-}
-
-func TestIDsAreSequential(t *testing.T) {
-	root := t.TempDir()
-	a, _ := WriteNewIssue(root, "", NewIssueOptions{Title: "a"})
-	b, _ := WriteNewIssue(root, "", NewIssueOptions{Title: "b"})
-	c, _ := WriteNewIssue(root, "", NewIssueOptions{Title: "c"})
-	if a.ID != 1 || b.ID != 2 || c.ID != 3 {
-		t.Fatalf("ids = %d,%d,%d", a.ID, b.ID, c.ID)
-	}
-}
-
-func TestListIssuesSortedSkippingNonNumeric(t *testing.T) {
-	root := t.TempDir()
-	WriteNewIssue(root, "", NewIssueOptions{Title: "first"})
-	WriteNewIssue(root, "", NewIssueOptions{Title: "second"})
-	os.WriteFile(filepath.Join(root, "issues", "README.md"), []byte("not an issue\n"), 0o644)
-	list := ListIssues(root, "")
-	if len(list) != 2 || list[0].ID != 1 || list[1].ID != 2 || list[0].Title != "first" || list[1].Title != "second" {
-		t.Fatalf("list = %+v", list)
-	}
-}
-
-func TestReadIssueAndMissing(t *testing.T) {
-	root := t.TempDir()
-	created, _ := WriteNewIssue(root, "", NewIssueOptions{Title: "T", Body: "Body"})
-	got, err := ReadIssue(root, "", created.ID)
+	read, err := Read(root, "", "N-0001")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Title != "T" || got.Body != "Body" {
+	if read.Title != "Build: the thing" || !reflect.DeepEqual(read.Labels, []string{"docs", "ui"}) || !strings.Contains(read.Body, "Wire up the store.") {
+		t.Fatalf("read = %+v", read)
+	}
+	if problems := ticket.ValidateFile(read); len(problems) != 0 {
+		t.Fatalf("problems = %v", problems)
+	}
+}
+
+func TestIDsSkipImportedTickets(t *testing.T) {
+	root := t.TempDir()
+	imported, err := ticket.New(ticket.Ticket{ID: "S-0014", Type: ticket.Story, Title: "x", Repo: "app"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Import(root, "", imported, ticket.Origin{Workspace: "w", Path: "p"}); err != nil {
+		t.Fatal(err)
+	}
+	created, err := New(root, "", NewOptions{Title: "y", Repo: "app"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.ID != "N-0015" {
+		t.Fatalf("id = %s", created.ID)
+	}
+}
+
+func TestReadAcceptsANumberAndReportsMissing(t *testing.T) {
+	root := t.TempDir()
+	if _, err := New(root, "", NewOptions{Title: "x", Repo: "app"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := Read(root, "", "1"); err != nil || got.ID != "N-0001" {
+		t.Fatalf("got = %+v, %v", got, err)
+	}
+	if _, err := Read(root, "", "N-0009"); err == nil || !strings.Contains(err.Error(), "not found") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestCustomDirAndEmptyStore(t *testing.T) {
+	root := t.TempDir()
+	if all, err := List(root, "custom"); err != nil || len(all) != 0 {
+		t.Fatalf("empty = %v, %v", all, err)
+	}
+	created, err := New(root, "custom", NewOptions{Title: "x", Repo: "app"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(created.Path, filepath.Join("custom", "N-0001.md")) {
+		t.Fatalf("path = %q", created.Path)
+	}
+}
+
+func TestListReportsUnreadableFile(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(Dir(root, ""), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(Dir(root, ""), "S-0001.md"), []byte("not a ticket"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := List(root, ""); err == nil {
+		t.Fatal("want an error")
+	}
+}
+
+func TestImportRefreshesSameOriginAndRefusesAnother(t *testing.T) {
+	root := t.TempDir()
+	mk := func(title string) *ticket.Ticket {
+		tk, err := ticket.New(ticket.Ticket{ID: "S-0001", Type: ticket.Story, Title: title, Repo: "app"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tk
+	}
+	origin := ticket.Origin{Workspace: "git@github.com:o/plan.git", Path: "specs/1-x/tickets/S-0001.md"}
+	if _, err := Import(root, "", mk("first"), origin); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Import(root, "", mk("second"), origin); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Read(root, "", "S-0001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Title != "second" || got.Origin != origin {
 		t.Fatalf("got = %+v", got)
 	}
-	if _, err := ReadIssue(root, "", 99); err == nil || !strings.Contains(err.Error(), "not found") {
-		t.Fatalf("want not found, got %v", err)
+	if _, err := Import(root, "", mk("third"), ticket.Origin{Workspace: "elsewhere", Path: "p"}); err == nil || !strings.Contains(err.Error(), "not replacing") {
+		t.Fatalf("err = %v", err)
+	}
+	if got, _ := Read(root, "", "S-0001"); got.Title != "second" {
+		t.Fatalf("overwritten: %+v", got)
 	}
 }
 
-func TestIssuesDirRelocatesStore(t *testing.T) {
+func TestMigrateConvertsOldIssues(t *testing.T) {
 	root := t.TempDir()
-	created, _ := WriteNewIssue(root, "tickets", NewIssueOptions{Title: "x"})
-	if !strings.HasSuffix(created.Path, filepath.Join("tickets", "1.md")) {
-		t.Fatalf("path = %q", created.Path)
+	dir := Dir(root, "")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
 	}
-	if LocalIssuesDir(root, "tickets") != filepath.Join(root, "tickets") {
-		t.Fatalf("local dir = %q", LocalIssuesDir(root, "tickets"))
+	for name, body := range map[string]string{
+		"1.md":     "---\nid: 1\nstatus: open\ntitle: Fix: login\nlabels: [docs, ui]\n---\n\nThe body.\n",
+		"2.md":     "---\nid: 2\nstatus: closed\ntitle: Done\nlabels: []\n---\n\n",
+		"12.md":    "No frontmatter at all\n",
+		".gitkeep": "",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
-}
-
-func TestEmptyStore(t *testing.T) {
-	root := t.TempDir()
-	if len(ListIssues(root, "")) != 0 || NextId(root, "") != 1 {
-		t.Fatalf("empty store list/next = %v / %d", ListIssues(root, ""), NextId(root, ""))
+	if !HasOldIssues(root, "") {
+		t.Fatal("HasOldIssues = false")
 	}
-}
-
-func TestWriteIssueRefusesToClobber(t *testing.T) {
-	root := t.TempDir()
-	dir := LocalIssuesDir(root, "")
-	os.MkdirAll(dir, 0o755)
-	os.WriteFile(filepath.Join(dir, "5.md"), []byte("existing content"), 0o644)
-	_, err := WriteIssue(root, "", Issue{ID: 5, Status: OPEN, Title: "x"})
-	if err == nil || !strings.Contains(err.Error(), "not overwriting") {
-		t.Fatalf("want not overwriting, got %v", err)
-	}
-	if b, _ := os.ReadFile(filepath.Join(dir, "5.md")); string(b) != "existing content" {
-		t.Fatalf("5.md clobbered")
-	}
-}
-
-func TestParseIssueRoundTripsClosedAndEmptyLabels(t *testing.T) {
-	root := t.TempDir()
-	created, _ := WriteNewIssue(root, "", NewIssueOptions{Title: "long", Labels: []string{}})
-	raw := "---\nid: " + strconv.Itoa(created.ID) + "\nstatus: closed\ntitle: long\nlabels: []\n---\n"
-	os.WriteFile(created.Path, []byte(raw), 0o644)
-	got, err := ReadIssue(root, "", created.ID)
+	moved, err := Migrate(root, "", "app")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Status != "closed" || !reflect.DeepEqual(got.Labels, []string{}) {
-		t.Fatalf("got status/labels = %q / %v", got.Status, got.Labels)
+	want := map[string]string{"1.md": "N-0001.md", "2.md": "N-0002.md", "12.md": "N-0012.md"}
+	if !reflect.DeepEqual(moved, want) {
+		t.Fatalf("moved = %v", moved)
+	}
+	if HasOldIssues(root, "") {
+		t.Fatal("old files remain")
+	}
+	all, err := List(root, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("all = %d", len(all))
+	}
+	for _, tk := range all {
+		if problems := ticket.ValidateFile(tk); len(problems) != 0 {
+			t.Errorf("%s: %v", tk.ID, problems)
+		}
+	}
+	first := all[0]
+	if first.Title != "Fix: login" || first.Status != ticket.StatusDraft || !reflect.DeepEqual(first.Labels, []string{"docs", "ui"}) || !strings.Contains(first.Body, "The body.") || first.Repo != "app" {
+		t.Fatalf("first = %+v", first)
+	}
+	if all[1].Status != ticket.StatusClosed {
+		t.Fatalf("second = %+v", all[1])
+	}
+	if all[2].Title != "Issue 12" || !strings.Contains(all[2].Body, "No frontmatter") {
+		t.Fatalf("third = %+v", all[2])
+	}
+	if again, err := Migrate(root, "", "app"); err != nil || len(again) != 0 {
+		t.Fatalf("second migration = %v, %v", again, err)
 	}
 }

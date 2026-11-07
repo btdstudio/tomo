@@ -4,15 +4,16 @@ package cli
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/btdstudio/kiso/repos"
 	kiso "github.com/btdstudio/kiso/state"
+	"github.com/btdstudio/kiso/ticket"
 	"github.com/btdstudio/kiso/version"
 	"github.com/btdstudio/tomo/internal/icm"
 	"github.com/btdstudio/tomo/internal/issues"
@@ -77,7 +78,8 @@ Usage:
   tomo settings                           show effective settings
   tomo switch [--all] [<change>]          list changes, or switch the active one
   tomo change new <title> [--issue <id>] [--body <b>]
-                                          create a change + issue + switch
+                                          create a change + native ticket + switch
+  tomo change new --from <ticket.md>      start a change from a planned ticket
   tomo change close <change> --reason <r> close a change
   tomo gate <phase> <status> [--force]    advance the active change's gate
   tomo reopen <phase> --reason <r>        move back to a phase, clearing later approvals
@@ -86,7 +88,7 @@ Usage:
   tomo doctor [--install]                 check toolchain prerequisites
   tomo list                               list installed tools + versions
   tomo commit [git commit args]           commit what's staged in the target repo
-  tomo pr [title]                         open a pull request for the target repo via gh
+  tomo pr [title]                         open a pull request for the target repo, linking the ticket
   tomo help                               this help
 `)
 }
@@ -109,6 +111,10 @@ func runStatus(root string) int {
 		gates = append(gates, p.Name+"="+st.Gates[p.Name])
 	}
 	fmt.Printf("gates:    %s\n", strings.Join(gates, " "))
+	if t := changeTicket(root, st); t != nil {
+		fmt.Printf("ticket:   %s %s\n", t.ID, t.Title)
+		fmt.Printf("branch:   %s\n", branchName(t))
+	}
 	return 0
 }
 
@@ -123,6 +129,7 @@ func runSettings(root string) int {
 	fmt.Printf("gates:       %s\n", e.Gates)
 	fmt.Printf("artifactDir: %s\n", e.ArtifactDir)
 	fmt.Printf("issuesDir:   %s\n", e.IssuesDir)
+	fmt.Printf("syncFile:    %s\n", e.SyncFile)
 	for k, v := range e.AppSources {
 		fmt.Printf("appSource.%s: %s\n", k, v)
 	}
@@ -196,7 +203,7 @@ func parseTransition(args []string) (pos []string, reason string, force bool, er
 }
 
 func runChange(root string, args []string) int {
-	usage := "usage: tomo change new <title> [--issue <id>] [--body <b>]\n       tomo change close <change> --reason <r>"
+	usage := "usage: tomo change new <title> [--issue <id>] [--body <b>]\n       tomo change new --from <ticket.md>\n       tomo change close <change> --reason <r>"
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, usage)
 		return 1
@@ -208,6 +215,13 @@ func runChange(root string, args []string) int {
 	}
 	switch args[0] {
 	case "new":
+		if len(args) > 1 && args[1] == "--from" {
+			if len(args) != 3 {
+				fmt.Fprintln(os.Stderr, "usage: tomo change new --from <ticket.md>")
+				return 1
+			}
+			return runChangeFrom(root, loaded.Effective, args[2])
+		}
 		return runChangeNew(root, loaded.Effective, args[1:])
 	case "close":
 		pos, reason, _, err := parseTransition(args[1:])
@@ -229,18 +243,12 @@ func runChange(root string, args []string) int {
 
 func runChangeNew(root string, e settings.Settings, args []string) int {
 	usage := "usage: tomo change new <title> [--issue <id>] [--body <b>]"
-	var title, body string
-	issueID := 0
+	var title, body, issueID string
 	for i := 0; i < len(args); i++ {
 		switch a := args[i]; {
 		case a == "--issue" && i+1 < len(args):
 			i++
-			id, err := strconv.Atoi(args[i])
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "invalid id: %s\n", args[i])
-				return 1
-			}
-			issueID = id
+			issueID = issues.NormalizeID(args[i])
 		case a == "--body" && i+1 < len(args):
 			i++
 			body = args[i]
@@ -263,32 +271,175 @@ func runChangeNew(root string, e settings.Settings, args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	if issueID != 0 {
-		if _, err := issues.ReadIssue(root, e.IssuesDir, issueID); err != nil {
+	if issueID != "" {
+		if _, err := issues.Read(root, e.IssuesDir, issueID); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
 	} else {
-		it, err := issues.WriteNewIssue(root, e.IssuesDir, issues.NewIssueOptions{Title: title, Body: body})
+		target, err := icm.TargetName(root)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		it, err := issues.New(root, e.IssuesDir, issues.NewOptions{Title: title, Repo: target, Body: body})
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
 		issueID = it.ID
 	}
+	return seedFromTicket(root, e, title, issueID)
+}
+
+// seedFromTicket records a change whose source is a ticket in the store.
+func seedFromTicket(root string, e settings.Settings, title, id string) int {
 	slug := state.Slugify(title)
 	if slug == "" {
 		slug = "change"
 	}
 	name := fmt.Sprintf("%d-%s", state.NextChangeId(root, e.ArtifactDir), slug)
-	rel := filepath.ToSlash(filepath.Join(e.IssuesDir, fmt.Sprintf("%d.md", issueID)))
+	rel := filepath.ToSlash(filepath.Join(e.IssuesDir, id+".md"))
 	st, err := state.SeedChange(root, name, e.ArtifactDir, []string{rel})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	fmt.Printf("created change %s (issue #%d)\n", st.Name, issueID)
+	fmt.Printf("created change %s (ticket %s)\n", st.Name, id)
 	return 0
+}
+
+// runChangeFrom starts a change from a planned ticket: it validates the file, checks
+// the ticket lands in this workspace's target repo, and snapshots it into the store.
+func runChangeFrom(root string, e settings.Settings, path string) int {
+	fail := func(err error) int {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	if _, err := state.LoadState(root); err != nil {
+		return fail(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fail(fmt.Errorf("tomo: cannot read %s: %v", path, err))
+	}
+	t, err := ticket.Parse(data)
+	if err != nil {
+		return fail(fmt.Errorf("tomo: %s: %v", path, err))
+	}
+	t.Path = path
+	if problems := ticket.ValidateFile(t); len(problems) > 0 {
+		return fail(fmt.Errorf("tomo: invalid ticket: %s", problems[0]))
+	}
+	if t.Status != ticket.StatusReady && t.Status != ticket.StatusPublished {
+		return fail(fmt.Errorf("tomo: %s is %s; only a ready or published ticket can start a change", t.ID, t.Status))
+	}
+	target, err := icm.TargetName(root)
+	if err != nil {
+		return fail(err)
+	}
+	if t.Repo != target {
+		return fail(fmt.Errorf("tomo: %s lands in repo %q, but this workspace targets %q", t.ID, t.Repo, target))
+	}
+	origin, err := ticketOrigin(path)
+	if err != nil {
+		return fail(err)
+	}
+	if _, err := issues.Import(root, e.IssuesDir, t, origin); err != nil {
+		return fail(err)
+	}
+	return seedFromTicket(root, e, t.Title, t.ID)
+}
+
+// ticketOrigin says where a ticket file came from: the origin remote of the repo
+// holding it, without credentials, and its path there. Outside a repo, or without a
+// remote, the workspace is the folder's name, so no local path gets committed.
+func ticketOrigin(path string) (ticket.Origin, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return ticket.Origin{}, err
+	}
+	dir := filepath.Dir(abs)
+	gitOut := func(args ...string) string {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		out, err := cmd.Output()
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(string(out))
+	}
+	top := gitOut("rev-parse", "--show-toplevel")
+	if top == "" {
+		return ticket.Origin{Workspace: filepath.Base(dir), Path: filepath.Base(abs)}, nil
+	}
+	// Resolve symlinks the way git did, so the relative path is right.
+	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
+		abs = resolved
+	}
+	rel, err := filepath.Rel(top, abs)
+	if err != nil {
+		return ticket.Origin{}, err
+	}
+	workspace := stripCredentials(gitOut("remote", "get-url", "origin"))
+	if workspace == "" {
+		workspace = filepath.Base(top)
+	}
+	return ticket.Origin{Workspace: workspace, Path: filepath.ToSlash(rel)}, nil
+}
+
+func stripCredentials(remote string) string {
+	if u, err := url.Parse(remote); err == nil && u.User != nil && (u.Scheme == "http" || u.Scheme == "https") {
+		u.User = nil
+		return u.String()
+	}
+	return remote
+}
+
+// changeTicket returns the ticket a change started from, if its source is one.
+func changeTicket(root string, st state.State) *ticket.Ticket {
+	for _, src := range st.Sources {
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(src)))
+		if err != nil {
+			continue
+		}
+		if t, err := ticket.Parse(data); err == nil && t.ID != "" {
+			return t
+		}
+	}
+	return nil
+}
+
+// branchName is the ship branch for a ticket, which includes its id.
+func branchName(t *ticket.Ticket) string {
+	name := strings.ToLower(t.ID)
+	if slug := state.Slugify(t.Title); slug != "" {
+		name += "-" + slug
+	}
+	return name
+}
+
+// prBody links a pull request to its ticket: id, external items, spec and ADRs.
+func prBody(t *ticket.Ticket) string {
+	lines := []string{fmt.Sprintf("Implements %s: %s", t.ID, t.Title), ""}
+	tools := make([]string, 0, len(t.External))
+	for tool := range t.External {
+		tools = append(tools, tool)
+	}
+	sort.Strings(tools)
+	for _, tool := range tools {
+		lines = append(lines, fmt.Sprintf("- **%s:** %s", tool, t.External[tool]))
+	}
+	if t.Origin.Workspace != "" {
+		lines = append(lines, fmt.Sprintf("- **Planned in:** %s (`%s`)", t.Origin.Workspace, t.Origin.Path))
+	}
+	if t.Spec != "" {
+		lines = append(lines, fmt.Sprintf("- **Spec:** `%s`", t.Spec))
+	}
+	if len(t.ADRs) > 0 {
+		lines = append(lines, "- **ADRs:** "+strings.Join(t.ADRs, ", "))
+	}
+	return strings.TrimRight(strings.Join(lines, "\n"), "\n") + "\n"
 }
 
 func runGate(root string, args []string) int {
@@ -385,8 +536,13 @@ func runIssues(root string, args []string) int {
 	}
 	switch args[0] {
 	case "list":
-		for _, it := range issues.ListIssues(root, dir) {
-			fmt.Printf("#%d [%s] %s\n", it.ID, it.Status, it.Title)
+		all, err := issues.List(root, dir)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		for _, it := range all {
+			fmt.Printf("%s [%s] %s\n", it.ID, it.Status, it.Title)
 		}
 		return 0
 	case "show":
@@ -394,17 +550,12 @@ func runIssues(root string, args []string) int {
 			fmt.Fprintln(os.Stderr, "usage: tomo issues show <id>")
 			return 1
 		}
-		id, err := strconv.Atoi(args[1])
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "invalid id: %s\n", args[1])
-			return 1
-		}
-		it, err := issues.ReadIssue(root, dir, id)
+		it, err := issues.Read(root, dir, args[1])
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-		fmt.Printf("#%d [%s] %s\n%s\n", it.ID, it.Status, it.Title, it.Body)
+		fmt.Printf("%s [%s] %s\n%s\n", it.ID, it.Status, it.Title, it.Body)
 		return 0
 	case "new":
 		var title string
@@ -427,12 +578,17 @@ func runIssues(root string, args []string) int {
 			fmt.Fprintln(os.Stderr, "usage: tomo issues new --title <t> [--labels a,b] [--body <b>]")
 			return 1
 		}
-		it, err := issues.WriteNewIssue(root, dir, issues.NewIssueOptions{Title: title, Labels: labels, Body: body})
+		target, err := icm.TargetName(root)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-		fmt.Printf("created #%d %s\n", it.ID, it.Title)
+		it, err := issues.New(root, dir, issues.NewOptions{Title: title, Repo: target, Labels: labels, Body: body})
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		fmt.Printf("created %s %s\n", it.ID, it.Title)
 		return 0
 	default:
 		fmt.Fprintf(os.Stderr, "tomo issues: unknown verb %q\n", args[0])
@@ -589,15 +745,41 @@ func runPR(root string, args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	ghArgs := []string{"pr", "create"}
-	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-		ghArgs = append(ghArgs, "--title", args[0])
-	}
+	ghArgs := prArgs(root, target, args)
 	if err := run(target, "gh", ghArgs...); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 	return 0
+}
+
+// prArgs builds the `gh pr create` arguments. When the active change came from a
+// ticket, the pull request links it, and a branch without the ticket's id gets a
+// warning.
+func prArgs(root, target string, args []string) []string {
+	ghArgs := []string{"pr", "create"}
+	title := ""
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		title = args[0]
+	}
+	st, err := state.LoadState(root)
+	if err == nil {
+		if t := changeTicket(root, st); t != nil {
+			if title == "" {
+				title = "[" + t.ID + "] " + t.Title
+			}
+			ghArgs = append(ghArgs, "--body", prBody(t))
+			branch := exec.Command("git", "branch", "--show-current")
+			branch.Dir = target
+			if out, err := branch.Output(); err == nil && !strings.Contains(strings.ToLower(string(out)), strings.ToLower(t.ID)) {
+				fmt.Fprintf(os.Stderr, "warning: branch %s doesn't include %s — `tomo status` shows the suggested name\n", strings.TrimSpace(string(out)), t.ID)
+			}
+		}
+	}
+	if title != "" {
+		ghArgs = append(ghArgs, "--title", title)
+	}
+	return ghArgs
 }
 
 func run(dir, name string, args ...string) error {

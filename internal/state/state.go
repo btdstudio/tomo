@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	kiso "github.com/btdstudio/kiso/state"
@@ -182,6 +183,26 @@ func migrate(data []byte) ([]byte, error) {
 		}
 	}
 	return json.Marshal(map[string]any{"schema": Schema, "changes": old.Changes})
+}
+
+// RewriteSources replaces source paths in STATE.json, for when a source file moves.
+// Each key and value is a path relative to the workspace root.
+func RewriteSources(root string, moved map[string]string) error {
+	if len(moved) == 0 {
+		return nil
+	}
+	data, err := os.ReadFile(StatePath(root))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	text := string(data)
+	for from, to := range moved {
+		text = strings.ReplaceAll(text, `"`+from+`"`, `"`+to+`"`)
+	}
+	return os.WriteFile(StatePath(root), []byte(text), 0o644)
 }
 
 func oldStatePath(root string) string { return filepath.Join(Workspace(root), "state.json") }

@@ -14,6 +14,7 @@ type Settings struct {
 	Gates       string            `json:"gates"`
 	ArtifactDir string            `json:"artifactDir"`
 	IssuesDir   string            `json:"issuesDir"`
+	SyncFile    string            `json:"syncFile"`
 	AppSources  map[string]string `json:"appSources"`
 }
 
@@ -33,6 +34,7 @@ func DefaultSettings() Settings {
 		Gates:       "block",
 		ArtifactDir: state.DefaultArtifactDir,
 		IssuesDir:   "00_issues",
+		SyncFile:    "01_planning/sync.md",
 		AppSources:  map[string]string{"kumi": "github.com/btdstudio/kumi/cmd/kumi", "hanga": "github.com/btdstudio/hanga/cmd/hanga"},
 	}
 }
@@ -55,6 +57,8 @@ func apply(s *Settings, key string, value any) {
 		s.ArtifactDir = val
 	case "issuesDir":
 		s.IssuesDir = val
+	case "syncFile":
+		s.SyncFile = val
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/btdstudio/kiso/ticket"
 	"github.com/btdstudio/tomo/internal/icm"
 	"github.com/btdstudio/tomo/internal/issues"
 	"github.com/btdstudio/tomo/internal/state"
@@ -21,10 +22,22 @@ func workspace(t *testing.T) string {
 	if _, err := icm.Scaffold(root, icm.Options{NoGit: true}); err != nil {
 		t.Fatal(err)
 	}
+	if code := runRepo(root, []string{"add", "app", "https://github.com/org/app"}); code != 0 {
+		t.Fatalf("repo add = %d", code)
+	}
 	if code := runChange(root, []string{"new", "Auth flow"}); code != 0 {
 		t.Fatalf("change new = %d", code)
 	}
 	return root
+}
+
+func listIssues(t *testing.T, root string) []*ticket.Ticket {
+	t.Helper()
+	all, err := issues.List(root, "00_issues")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return all
 }
 
 func readLog(t *testing.T, root string) string {
@@ -53,10 +66,10 @@ func TestChangeNewCreatesIssueAndSeeds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Name != "1-auth-flow" || st.Phase != "intake" || st.Status != "draft" || st.Sources[0] != "00_issues/1.md" {
+	if st.Name != "1-auth-flow" || st.Phase != "intake" || st.Status != "draft" || st.Sources[0] != "00_issues/N-0001.md" {
 		t.Fatalf("st = %+v", st)
 	}
-	if got := issues.ListIssues(root, "00_issues"); len(got) != 1 || got[0].Title != "Auth flow" {
+	if got := listIssues(t, root); len(got) != 1 || got[0].Title != "Auth flow" || got[0].Repo != "app" {
 		t.Fatalf("issues = %+v", got)
 	}
 }
@@ -66,7 +79,7 @@ func TestChangeNewFromExistingIssue(t *testing.T) {
 	if code := runChange(root, []string{"new", "Second", "--issue", "1"}); code != 0 {
 		t.Fatalf("change new = %d", code)
 	}
-	if got := issues.ListIssues(root, "00_issues"); len(got) != 1 {
+	if got := listIssues(t, root); len(got) != 1 {
 		t.Fatalf("made another issue: %+v", got)
 	}
 	if code := runChange(root, []string{"new", "Third", "--issue", "99"}); code != 1 {
@@ -241,21 +254,35 @@ func TestRunNoArgs(t *testing.T) {
 }
 
 func TestRunIssuesNewAndList(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	dir := t.TempDir()
 	if _, err := icm.Scaffold(dir, icm.Options{NoGit: true}); err != nil {
 		t.Fatal(err)
 	}
+	if got := runIssues(dir, []string{"new", "--title", "Fix login"}); got != 1 {
+		t.Fatalf("without a target = %d, want 1", got)
+	}
+	if code := runRepo(dir, []string{"add", "app", "https://github.com/org/app"}); code != 0 {
+		t.Fatal("repo add")
+	}
 	if got := runIssues(dir, []string{"new", "--title", "Fix login"}); got != 0 {
 		t.Fatalf("runIssues new exit %d", got)
 	}
-	all := issues.ListIssues(dir, "00_issues")
-	if len(all) != 1 || all[0].ID != 1 || all[0].Title != "Fix login" {
+	all := listIssues(t, dir)
+	if len(all) != 1 || all[0].ID != "N-0001" || all[0].Title != "Fix login" {
 		t.Fatalf("issues = %+v", all)
+	}
+	if got := runIssues(dir, []string{"show", "1"}); got != 0 {
+		t.Fatalf("show = %d", got)
+	}
+	if got := runIssues(dir, []string{"show", "N-0009"}); got != 1 {
+		t.Fatalf("show missing = %d", got)
 	}
 }
 
 func TestRepoAddKeepsWorkspaceToOneTarget(t *testing.T) {
-	root := workspace(t)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	root := t.TempDir()
 	if code := runEnv(root); code != 1 {
 		t.Fatalf("env with no target = %d, want 1", code)
 	}
@@ -268,7 +295,8 @@ func TestRepoAddKeepsWorkspaceToOneTarget(t *testing.T) {
 }
 
 func TestEnvPrintsFlagsForRegisteredRepos(t *testing.T) {
-	root := workspace(t)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	root := t.TempDir()
 	target := t.TempDir()
 	if code := runRepo(root, []string{"add", "app", "https://github.com/org/app", "--path", target}); code != 0 {
 		t.Fatalf("repo add = %d", code)
@@ -285,5 +313,164 @@ func TestEnvPrintsFlagsForRegisteredRepos(t *testing.T) {
 	out, _ := io.ReadAll(r)
 	if code != 0 || strings.TrimSpace(string(out)) != "--add-dir "+target {
 		t.Fatalf("code = %d, out = %q", code, out)
+	}
+}
+
+const plannedTicket = `---
+schema: 1
+id: S-0014                 # planned in zumen
+type: story
+title: Add release workflow
+parent: F-0003
+repo: app
+depends_on: [S-0011]
+change: 3-release
+spec: specs/3-release/functional-spec.md
+adrs: [ADR-0004]
+status: ready
+---
+
+## Context
+Why.
+
+## Acceptance criteria
+- [ ] AC1: Given a tag When pushed Then a release is cut
+`
+
+func writeTicket(t *testing.T, dir, name, body string) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestChangeFromTicketSnapshotsAndSeeds(t *testing.T) {
+	root := workspace(t)
+	planning := t.TempDir()
+	gitCmd(t, planning, "init", "-q")
+	gitCmd(t, planning, "remote", "add", "origin", "https://x-access-token:secret@github.com/org/plan.git")
+	path := writeTicket(t, planning, "S-0014.md", plannedTicket)
+	if code := runChange(root, []string{"new", "--from", path}); code != 0 {
+		t.Fatalf("change new --from = %d", code)
+	}
+	st, err := state.LoadState(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Name != "2-add-release-workflow" || st.Phase != "intake" || st.Sources[0] != "00_issues/S-0014.md" {
+		t.Fatalf("st = %+v", st)
+	}
+	snap, err := issues.Read(root, "00_issues", "S-0014")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snap.Origin.Workspace != "https://github.com/org/plan.git" || snap.Origin.Path != "S-0014.md" {
+		t.Fatalf("origin = %+v", snap.Origin)
+	}
+	raw, _ := os.ReadFile(snap.Path)
+	if strings.Contains(string(raw), "secret") {
+		t.Fatalf("committed a credential:\n%s", raw)
+	}
+	if !strings.Contains(string(raw), "# planned in zumen") {
+		t.Fatalf("snapshot rewrote unchanged fields:\n%s", raw)
+	}
+	if problems := ticket.ValidateFile(snap); len(problems) != 0 {
+		t.Fatalf("problems = %v", problems)
+	}
+	if got := branchName(snap); got != "s-0014-add-release-workflow" {
+		t.Fatalf("branch = %q", got)
+	}
+}
+
+func TestChangeFromRefusals(t *testing.T) {
+	root := workspace(t)
+	dir := t.TempDir()
+	for name, c := range map[string]struct{ file, body string }{
+		"wrong repo":     {"S-0014.md", strings.Replace(plannedTicket, "repo: app", "repo: other", 1)},
+		"draft":          {"S-0014.md", strings.Replace(plannedTicket, "status: ready", "status: draft", 1)},
+		"no criteria":    {"S-0014.md", strings.Replace(plannedTicket, "- [ ] AC1: Given a tag When pushed Then a release is cut\n", "", 1)},
+		"not a ticket":   {"S-0014.md", "just text"},
+		"name mismatch":  {"other.md", plannedTicket},
+		"epic":           {"E-0001.md", strings.NewReplacer("id: S-0014", "id: E-0001", "type: story", "type: epic", "repo: app\n", "").Replace(plannedTicket)},
+		"drifted frozen": {"S-0014.md", strings.Replace(plannedTicket, "status: ready", "status: published\nexternal:\n  github: o/r#1\npublished_hash: abc", 1)},
+	} {
+		path := writeTicket(t, dir, c.file, c.body)
+		if code := runChange(root, []string{"new", "--from", path}); code != 1 {
+			t.Errorf("%s: code = %d, want 1", name, code)
+		}
+		os.Remove(path)
+	}
+	if code := runChange(root, []string{"new", "--from", filepath.Join(dir, "missing.md")}); code != 1 {
+		t.Errorf("missing file: want 1")
+	}
+	if got := listIssues(t, root); len(got) != 1 {
+		t.Fatalf("a refused import left a ticket: %+v", got)
+	}
+	if _, err := os.Stat(state.ChangeDir(root, "2-add-release-workflow", "")); err == nil {
+		t.Fatal("a refused import created a change")
+	}
+}
+
+func TestChangeFromRefusesSameIDFromElsewhere(t *testing.T) {
+	root := workspace(t)
+	first := writeTicket(t, t.TempDir(), "S-0014.md", plannedTicket)
+	if code := runChange(root, []string{"new", "--from", first}); code != 0 {
+		t.Fatal("first import")
+	}
+	second := writeTicket(t, t.TempDir(), "S-0014.md", plannedTicket)
+	if code := runChange(root, []string{"new", "--from", second}); code != 1 {
+		t.Fatalf("second origin = %d, want 1", code)
+	}
+}
+
+func TestPublishedTicketImportsFrozenAndPRLinksIt(t *testing.T) {
+	root := workspace(t)
+	tk, err := ticket.Parse([]byte(plannedTicket))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tk.MarkPublished("github", "org/app#7"); err != nil {
+		t.Fatal(err)
+	}
+	path := writeTicket(t, t.TempDir(), "S-0014.md", string(tk.Bytes()))
+	if code := runChange(root, []string{"new", "--from", path}); code != 0 {
+		t.Fatal("import")
+	}
+	st, err := state.LoadState(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snap := changeTicket(root, st)
+	if snap == nil || !snap.Frozen() || snap.Drifted() {
+		t.Fatalf("snapshot = %+v", snap)
+	}
+	body := prBody(snap)
+	for _, want := range []string{"Implements S-0014: Add release workflow", "**github:** org/app#7", "**Spec:** `specs/3-release/functional-spec.md`", "ADR-0004"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body missing %q:\n%s", want, body)
+		}
+	}
+	args := prArgs(root, t.TempDir(), nil)
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "--title [S-0014] Add release workflow") || !strings.Contains(joined, "--body") {
+		t.Fatalf("args = %v", args)
+	}
+	if args := prArgs(root, t.TempDir(), []string{"My title"}); !strings.Contains(strings.Join(args, " "), "--title My title") {
+		t.Fatalf("args = %v", args)
+	}
+}
+
+func TestStripCredentials(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://user:token@github.com/o/r.git": "https://github.com/o/r.git",
+		"https://token@github.com/o/r.git":      "https://github.com/o/r.git",
+		"git@github.com:o/r.git":                "git@github.com:o/r.git",
+		"":                                      "",
+	} {
+		if got := stripCredentials(in); got != want {
+			t.Errorf("stripCredentials(%q) = %q", in, got)
+		}
 	}
 }

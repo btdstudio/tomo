@@ -11,6 +11,8 @@ import (
 	"github.com/btdstudio/kiso/version"
 	"github.com/btdstudio/tomo/internal/cli"
 	"github.com/btdstudio/tomo/internal/icm"
+	"github.com/btdstudio/tomo/internal/issues"
+	"github.com/btdstudio/tomo/internal/settings"
 	"github.com/btdstudio/tomo/internal/state"
 )
 
@@ -84,6 +86,9 @@ func runUpdate() int {
 	if migrated {
 		fmt.Println("moved .tomo/state.json and .tomo/log.md to STATE.json and LOG.md — review and commit them")
 	}
+	if code := migrateIssues(); code != 0 {
+		return code
+	}
 	if icm.OldAppsDir(".") {
 		fmt.Println("note: code now lives outside the workspace. src/apps/ is left as it is; register it with `tomo repo add <name> <remote> --path <dir>`")
 	}
@@ -100,6 +105,39 @@ func runUpdate() int {
 	}
 	fmt.Printf("update complete (%d updated, %d skipped, %d unchanged)\n",
 		len(rep.Updated), len(rep.Skipped), len(rep.Unchanged))
+	return 0
+}
+
+// migrateIssues converts old <n>.md issues, which need a target repo to name.
+func migrateIssues() int {
+	loaded, err := settings.LoadSettings(".")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	dir := loaded.Effective.IssuesDir
+	if !issues.HasOldIssues(".", dir) {
+		return 0
+	}
+	target, err := icm.TargetName(".")
+	if err != nil {
+		fmt.Printf("note: %s has issues in the old format. Register a target repo, then run `tomo update` again to convert them\n", dir)
+		return 0
+	}
+	moved, err := issues.Migrate(".", dir, target)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	sources := map[string]string{}
+	for from, to := range moved {
+		sources[dir+"/"+from] = dir + "/" + to
+	}
+	if err := state.RewriteSources(".", sources); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	fmt.Printf("converted %d issues to tickets in %s — review and commit them\n", len(moved), dir)
 	return 0
 }
 
