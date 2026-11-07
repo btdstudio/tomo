@@ -34,6 +34,8 @@ go install github.com/btdstudio/tomo/cmd/tomo@latest
 | `tomo gate <phase> <status> [--force]` | advance the active change's gate |
 | `tomo reopen <phase> --reason <r>` | move back to a phase and clear later approvals |
 | `tomo issues new\|list\|show` | manage `00_issues/` |
+| `tomo repo add\|list\|path\|doctor` | manage the repos this workspace works with |
+| `tomo env` | print harness flags for this workspace's repos |
 | `tomo doctor [--install]` | check toolchain prerequisites |
 | `tomo list` | list installed tools + versions |
 | `tomo commit [git commit args]` | commit what's staged, one micro-commit at a time |
@@ -61,7 +63,8 @@ commit `STATE.json` and `LOG.md` for you, without pushing.
 ├── AGENTS.md          root map + routing table + command list
 ├── STATE.json         per-change phase, gates, sources (committed)
 ├── LOG.md             gate history (committed)
-├── .tomo/             settings + manifest (committed), active change (local)
+├── REPOS.json         logical repos and remotes (committed)
+├── .tomo/             settings + manifest (committed), active change + repo paths (local)
 ├── 00_issues/         local issue store (<id>.md)
 ├── 01_planning/       analyst + architect (specs, personas, templates)
 ├── 02_implementation/ coder

@@ -13,8 +13,8 @@ This file applies to agents working on the tomo repo itself.
   and the golden test (`internal/icm/golden_test.go`) pin it. After editing the
   scaffold, run `go test ./internal/icm -update` to regenerate the golden.
 - Workspace state is committed so approvals survive a clone: `STATE.json`,
-  `LOG.md`, `.tomo/settings.json`, `.tomo/manifest.json`. Only `.tomo/active` and
-  `.tomo/SLIP.md` are local and gitignored — never commit them.
+  `LOG.md`, `REPOS.json`, `.tomo/settings.json`, `.tomo/manifest.json`. Only
+  `.tomo/active`, `.tomo/paths.json` and `.tomo/SLIP.md` are local and gitignored — never commit them.
 
 ## Layout
 
