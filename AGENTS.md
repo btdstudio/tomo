@@ -32,7 +32,7 @@ testdata/golden/    byte-identity fixtures (icm/manifest.json)
 
 ## Process
 
-- Requirements before design; design before plan; plan before implement.
+- intake → requirements → design → plan → implement → test → review → security → ship.
 - `tomo init` scaffolds a project; `tomo update` refreshes its managed files;
   `tomo add` installs an app generator, scaffolds outside the workspace, and
   registers the result as the one target repo.
