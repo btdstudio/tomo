@@ -41,7 +41,7 @@ again against the fixed code.
 | `tomo change new <title> [--issue <id>]` | create a change + native ticket + switch |
 | `tomo change new --from <ticket.md>` | start a change from a planned ticket |
 | `tomo change close <change> --reason <r>` | close a change |
-| `tomo gate <phase> <status> [--force]` | advance the active change's gate (earlier phases must be finished) |
+| `tomo gate <phase> <status> [--reason <r>] [--force]` | advance the active change's gate (earlier phases must be finished) |
 | `tomo reopen <phase> --reason <r>` | move back to a phase and clear later approvals |
 | `tomo issues new|list|show` | manage the tickets in `00_issues/` |
 | `tomo repo add\|list\|path\|doctor` | manage this workspace's one target repo |

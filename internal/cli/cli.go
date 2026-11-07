@@ -81,7 +81,8 @@ Usage:
                                           create a change + native ticket + switch
   tomo change new --from <ticket.md>      start a change from a planned ticket
   tomo change close <change> --reason <r> close a change
-  tomo gate <phase> <status> [--force]    advance the active change's gate
+  tomo gate <phase> <status> [--reason <r>] [--force]
+                                          advance the active change's gate
   tomo reopen <phase> --reason <r>        move back to a phase, clearing later approvals
   tomo issues new|list|show [args]        manage 00_issues/
 ` + repos.Usage("tomo") + `  tomo env                                print harness flags for the target repo
