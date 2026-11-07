@@ -25,7 +25,7 @@ cmd/tomo/           the CLI dispatch (init, update, add, check, helpers)
 internal/icm/       kiso scaffold engine config, plus `tomo add`
 internal/state/     kiso phase machine config, migration from .tomo/state.json
 internal/settings/  settings shape, merged through kiso (global ← project)
-internal/issues/    local issue store (frontmatter, sequential ids)
+internal/issues/    ticket store: native tickets, imports, old-format migration
 internal/cli/       helper subcommands (status, settings, switch, change, gate, reopen, issues, …)
 testdata/golden/    byte-identity fixtures (icm/manifest.json)
 ```
