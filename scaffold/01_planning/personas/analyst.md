@@ -1,7 +1,7 @@
 # analyst — Requirements Analyst
 
-Owns the **requirements** phase. Turns a vague base source into unambiguous,
-verifiable requirements. Does not design or implement.
+Owns the **intake** and **requirements** phases. Settles what the issue in
+`00_issues/` asks and why, then turns it into unambiguous, verifiable requirements. Does not design or implement.
 
 ## How
 - Read `00_issues/*` and distil — never restate the source verbatim.

@@ -147,7 +147,7 @@ func TestSaveStateWritesSlimShapeAndLoadResolves(t *testing.T) {
 	if err := json.Unmarshal(raw, &sf); err != nil {
 		t.Fatal(err)
 	}
-	if sf.Schema != 1 {
+	if sf.Schema != Schema {
 		t.Fatalf("schema = %d", sf.Schema)
 	}
 	// The active change is local, not shared.
@@ -397,13 +397,13 @@ func TestPhases(t *testing.T) {
 	for _, p := range Machine.Phases {
 		names = append(names, p.Name)
 	}
-	if !reflect.DeepEqual(names, []string{"requirements", "design", "plan", "implement"}) {
+	if !reflect.DeepEqual(names, []string{"intake", "requirements", "design", "plan", "implement", "test", "review", "security", "ship"}) {
 		t.Fatalf("phases = %v", names)
 	}
 }
 
 func TestCheckGateRequiresImplementComplete(t *testing.T) {
-	st := State{Gates: map[string]string{"requirements": "approved", "design": "draft"}}
+	st := State{Gates: map[string]string{"intake": "approved", "requirements": "approved", "design": "draft"}}
 	if err := CheckGate(st, "plan", "draft"); err == nil || !strings.Contains(err.Error(), "requires design") {
 		t.Fatalf("err = %v", err)
 	}
@@ -454,7 +454,7 @@ func TestMigrateMovesStateLogAndActive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]string{"requirements": "approved", "design": "approved", "plan": "approved"}
+	want := map[string]string{"intake": "approved", "requirements": "approved", "design": "approved", "plan": "approved"}
 	if st.Name != "1-alpha" || st.Status != "approved" || !reflect.DeepEqual(st.Gates, want) {
 		t.Fatalf("st = %+v", st)
 	}
@@ -537,5 +537,43 @@ func TestEarlierLayoutIsRefused(t *testing.T) {
 	}
 	if _, err := MigrateOldState(root); err == nil || !strings.Contains(err.Error(), "earlier layout") {
 		t.Fatalf("MigrateOldState err = %v", err)
+	}
+}
+
+func TestMigrateSchema1MarksIntakeApproved(t *testing.T) {
+	root := t.TempDir()
+	body := `{"schema":1,"changes":{
+  "1-done":{"phase":"implement","status":"complete","gates":{"requirements":"approved","design":"approved","plan":"approved","implement":"complete"}},
+  "2-fresh":{"phase":"","status":"","gates":{}}
+}}`
+	if err := os.WriteFile(StatePath(root), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	changes, err := ReadChanges(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := *changes["1-done"]
+	if done.Gates["intake"] != "approved" || done.Gates["test"] != "" {
+		t.Fatalf("gates = %+v", done.Gates)
+	}
+	if len(changes["2-fresh"].Gates) != 0 {
+		t.Fatalf("fresh gates = %+v", changes["2-fresh"].Gates)
+	}
+	if err := CheckGate(done, "test", "draft"); err != nil {
+		t.Fatalf("upgraded change should reach test: %v", err)
+	}
+	if after, _ := os.ReadFile(StatePath(root)); string(after) != body {
+		t.Fatal("a read rewrote STATE.json")
+	}
+}
+
+func TestRefusesNewerSchema(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(StatePath(root), []byte(`{"schema":99,"changes":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadChanges(root); err == nil || !strings.Contains(err.Error(), "newer") {
+		t.Fatalf("err = %v", err)
 	}
 }

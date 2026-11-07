@@ -7,9 +7,9 @@ import (
 	"io/fs"
 
 	"github.com/btdstudio/kiso/scaffold"
-	kiso "github.com/btdstudio/kiso/state"
 	"github.com/btdstudio/tomo"
 	"github.com/btdstudio/tomo/internal/settings"
+	"github.com/btdstudio/tomo/internal/state"
 )
 
 // WorkspaceDir is the per-project config directory. It is committed, except for
@@ -47,7 +47,7 @@ func seeds() ([]scaffold.Seed, error) {
 		return nil, err
 	}
 	stateData, err := json.MarshalIndent(map[string]any{
-		"schema":  kiso.Schema,
+		"schema":  state.Schema,
 		"changes": map[string]any{},
 	}, "", "  ")
 	if err != nil {

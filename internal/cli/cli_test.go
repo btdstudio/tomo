@@ -13,7 +13,7 @@ import (
 	"github.com/btdstudio/tomo/internal/state"
 )
 
-// workspace returns a scaffolded root with one change at requirements.
+// workspace returns a scaffolded root with one change at intake.
 func workspace(t *testing.T) string {
 	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
@@ -53,7 +53,7 @@ func TestChangeNewCreatesIssueAndSeeds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Name != "1-auth-flow" || st.Phase != "requirements" || st.Status != "draft" || st.Sources[0] != "00_issues/1.md" {
+	if st.Name != "1-auth-flow" || st.Phase != "intake" || st.Status != "draft" || st.Sources[0] != "00_issues/1.md" {
 		t.Fatalf("st = %+v", st)
 	}
 	if got := issues.ListIssues(root, "00_issues"); len(got) != 1 || got[0].Title != "Auth flow" {
@@ -96,8 +96,10 @@ func TestGateEnforcesLoopOrder(t *testing.T) {
 		t.Fatalf("out of order = %d, want 1", code)
 	}
 	for _, c := range [][]string{
-		{"requirements", "approved"}, {"design", "approved"}, {"plan", "approved"},
+		{"intake", "approved"}, {"requirements", "approved"}, {"design", "approved"}, {"plan", "approved"},
 		{"implement", "in-progress"}, {"implement", "complete"},
+		{"test", "approved"}, {"review", "approved"}, {"security", "approved"},
+		{"ship", "in-progress"}, {"ship", "complete"},
 	} {
 		if code := runGate(root, c); code != 0 {
 			t.Fatalf("gate %v = %d", c, code)
@@ -111,19 +113,65 @@ func TestGateEnforcesLoopOrder(t *testing.T) {
 	}
 }
 
+func TestFailedReviewLoopsBackToImplement(t *testing.T) {
+	root := workspace(t)
+	for _, c := range [][]string{
+		{"intake", "approved"}, {"requirements", "approved"}, {"design", "approved"}, {"plan", "approved"},
+		{"implement", "in-progress"},
+	} {
+		if code := runGate(root, c); code != 0 {
+			t.Fatalf("gate %v = %d", c, code)
+		}
+	}
+	if code := runGate(root, []string{"test", "approved"}); code != 1 {
+		t.Fatalf("test during implement = %d, want 1", code)
+	}
+	for _, c := range [][]string{
+		{"implement", "complete"}, {"test", "approved"}, {"review", "approved"},
+		{"security", "skipped", "--reason", "docs only"},
+	} {
+		if code := runGate(root, c); code != 0 {
+			t.Fatalf("gate %v = %d", c, code)
+		}
+	}
+	if code := runReopen(root, []string{"implement", "--reason", "critical finding"}); code != 0 {
+		t.Fatalf("reopen = %d", code)
+	}
+	st, err := state.LoadState(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Gates["implement"] != "in-progress" || st.Gates["test"] != "" || st.Gates["review"] != "" || st.Gates["security"] != "skipped" || st.Gates["plan"] != "approved" {
+		t.Fatalf("gates = %+v", st.Gates)
+	}
+	if code := runGate(root, []string{"review", "approved"}); code != 1 {
+		t.Fatalf("review before re-testing = %d, want 1", code)
+	}
+}
+
+func TestSecurityCanBeSkippedButNotOtherPhases(t *testing.T) {
+	root := workspace(t)
+	if code := runGate(root, []string{"review", "skipped", "--reason", "r", "--force"}); code != 1 {
+		t.Fatalf("skip review = %d, want 1", code)
+	}
+	if code := runGate(root, []string{"security", "skipped", "--force"}); code != 1 {
+		t.Fatalf("skip without reason = %d, want 1", code)
+	}
+}
+
 func TestGateForceOverridesAndLogs(t *testing.T) {
 	root := workspace(t)
 	if code := runGate(root, []string{"plan", "approved", "--force"}); code != 0 {
 		t.Fatalf("code = %d", code)
 	}
-	if log := readLog(t, root); !strings.Contains(log, "override: tomo: plan requires requirements") {
+	if log := readLog(t, root); !strings.Contains(log, "override: tomo: plan requires intake") {
 		t.Fatalf("override not logged: %s", log)
 	}
 }
 
 func TestReopenAndClose(t *testing.T) {
 	root := workspace(t)
-	for _, phase := range []string{"requirements", "design"} {
+	for _, phase := range []string{"intake", "requirements", "design"} {
 		if code := runGate(root, []string{phase, "approved"}); code != 0 {
 			t.Fatalf("gate %s = %d", phase, code)
 		}

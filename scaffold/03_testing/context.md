@@ -1,6 +1,6 @@
 # 03_testing — QA room
 
-Owns the **testing** pass after implementation. (Hybrid stage: tomo folds test
+Owns the **test** phase after implementation. (Hybrid stage: tomo folds test
 authoring into the coder and adequacy into the reviewer — this workspace keeps a
 dedicated QA pass.)
 
@@ -13,7 +13,8 @@ dedicated QA pass.)
 
 ## Output (write)
 - tests alongside the app under the target repo (see `tomo repo list`)
-- `reports/<feature>_test_results.md` — run results & coverage
+- `01_planning/specs/<n>-<slug>/test-results.md` — run results & coverage
 
 ## Gate
-Report pass/fail per acceptance criterion. Failures loop back to the coder.
+Report pass/fail per acceptance criterion, then stop for approval. Failures loop
+back to the coder with `tomo reopen implement --reason <r>`.

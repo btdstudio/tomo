@@ -1,8 +1,8 @@
 // Package state configures kiso's phase machine for tomo and migrates workspaces
 // that kept their state under .tomo/.
 //
-// The loop is requirements → design → plan → implement. Implement is a run phase;
-// the rest are gated.
+// The loop is intake → requirements → design → plan → implement → test → review →
+// security → ship. Implement and ship are run phases; the rest are gated.
 //
 // Layout:
 //
@@ -32,11 +32,19 @@ import (
 
 // Machine is the SDD loop.
 var Machine = kiso.Machine{Tool: "tomo", Phases: []kiso.Phase{
+	{Name: "intake", Kind: kiso.Gated},
 	{Name: "requirements", Kind: kiso.Gated},
 	{Name: "design", Kind: kiso.Gated},
 	{Name: "plan", Kind: kiso.Gated},
 	{Name: "implement", Kind: kiso.Run},
+	{Name: "test", Kind: kiso.Gated},
+	{Name: "review", Kind: kiso.Gated},
+	{Name: "security", Kind: kiso.Gated, Skippable: true},
+	{Name: "ship", Kind: kiso.Run},
 }}
+
+// Schema is tomo's STATE.json version. Version 2 added the intake phase.
+const Schema = 2
 
 // DefaultArtifactDir is where per-change spec artifacts live, relative to the
 // project root (the ICM scaffold's 01_planning/specs/ convention).
@@ -54,7 +62,9 @@ func store(artifactDir string) kiso.Store {
 		Machine:   Machine,
 		SpecsDir:  filepath.FromSlash(artifactDir),
 		Commit:    true,
+		Schema:    Schema,
 		Now:       func() time.Time { return Now() },
+		Migrate:   migrate,
 		Preflight: refuseOldState,
 	}
 }
@@ -150,6 +160,30 @@ func CloseChange(root, artifactDir, name, reason string) (State, error) {
 // AppendLog appends one timestamped line to LOG.md.
 func AppendLog(root, line string) error { return store("").Log(root, line) }
 
+// migrate upgrades a schema 1 STATE.json. A change already underway has been past
+// intake, so intake counts as approved; later phases start empty.
+func migrate(data []byte) ([]byte, error) {
+	var old struct {
+		Changes map[string]*kiso.Change `json:"changes"`
+	}
+	if err := json.Unmarshal(data, &old); err != nil {
+		return nil, err
+	}
+	for _, c := range old.Changes {
+		if c == nil || c.Gates["intake"] != "" {
+			continue
+		}
+		started := false
+		for _, status := range c.Gates {
+			started = started || status != ""
+		}
+		if started {
+			c.Gates["intake"] = kiso.Approved
+		}
+	}
+	return json.Marshal(map[string]any{"schema": Schema, "changes": old.Changes})
+}
+
 func oldStatePath(root string) string { return filepath.Join(Workspace(root), "state.json") }
 func oldLogPath(root string) string   { return filepath.Join(Workspace(root), "log.md") }
 
@@ -225,7 +259,8 @@ func MigrateOldState(root string) (bool, error) {
 			c.Sources = []string{}
 		}
 	}
-	buf, err := json.MarshalIndent(map[string]any{"schema": kiso.Schema, "changes": changes}, "", "  ")
+	// Schema 1 is the shape from before intake; reads upgrade it from there.
+	buf, err := json.MarshalIndent(map[string]any{"schema": 1, "changes": changes}, "", "  ")
 	if err != nil {
 		return false, err
 	}

@@ -44,18 +44,26 @@ go install github.com/btdstudio/tomo/cmd/tomo@latest
 
 ## The loop
 
-A change flows through four gated phases, each owned by a persona:
+A change flows through nine phases, each owned by a persona:
 
-1. **requirements** (analyst) — turn an issue into an unambiguous spec.
-2. **design** (architect) — the smallest solution that satisfies it.
-3. **plan** (architect) — break it into dependency-ordered tasks.
-4. **implement** (coder) — execute tasks one at a time, with tests.
+1. **intake** (analyst) — settle what the issue asks and why.
+2. **requirements** (analyst) — turn it into an unambiguous spec.
+3. **design** (architect) — the smallest solution that satisfies it.
+4. **plan** (architect) — break it into dependency-ordered tasks.
+5. **implement** (coder) — execute tasks one at a time, with tests.
+6. **test** (qa) — report pass/fail per acceptance criterion.
+7. **review** (reviewer) — correctness, scope and test adequacy.
+8. **security** (security) — vulnerabilities and security debt. Skippable, with a reason.
+9. **ship** — branch, micro-commits, and a PR linking the issue.
 
-`review` and `security` are read-only passes after implement; `qa` owns the
-testing stage. Each phase stops at a gate for your approval. With the default
-`gates: block` setting, `tomo gate` refuses a phase until the earlier ones are
-finished; `--force` overrides this and records it in `LOG.md`. State changes
-commit `STATE.json` and `LOG.md` for you, without pushing.
+Implement and ship are run phases; the rest stop at a gate for your approval. With
+the default `gates: block` setting, `tomo gate` refuses a phase until the earlier ones
+are finished; `--force` overrides this and records it in `LOG.md`. A test failure or
+serious finding loops back with `tomo reopen implement`, which clears the approvals
+after it.
+
+State changes commit `STATE.json` and `LOG.md` for you, without pushing, and gates
+also commit the change's spec folder.
 
 ## The workspace
 

@@ -2,4 +2,4 @@ module github.com/btdstudio/tomo
 
 go 1.22
 
-require github.com/btdstudio/kiso v0.3.0
+require github.com/btdstudio/kiso v0.4.0
