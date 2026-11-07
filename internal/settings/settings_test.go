@@ -54,7 +54,7 @@ func TestProjectSupersedesGlobal(t *testing.T) {
 	}
 	e := loaded.Effective
 	if e.BaseSource != "issue:12" || e.Gates != "prompt" ||
-		e.ArtifactDir != "01_planning/specs" || e.Issues != "local" || e.IssuesDir != "issues/custom" {
+		e.ArtifactDir != "01_planning/specs" || e.IssuesDir != "issues/custom" {
 		t.Fatalf("effective = %+v", e)
 	}
 }
@@ -62,19 +62,6 @@ func TestProjectSupersedesGlobal(t *testing.T) {
 func TestInvalidGatesThrows(t *testing.T) {
 	if _, err := MergeSettings(map[string]any{"gates": "aggressive"}); err == nil || !strings.Contains(err.Error(), "invalid gates") {
 		t.Fatalf("want invalid gates, got %v", err)
-	}
-}
-
-func TestInvalidIssuesFallsBackToLocal(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	root := t.TempDir()
-	writeSettings(t, ProjectSettingsPath(root), map[string]any{"issues": "bogus"})
-	loaded, err := LoadSettings(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if loaded.Effective.Issues != "local" {
-		t.Fatalf("issues = %q", loaded.Effective.Issues)
 	}
 }
 

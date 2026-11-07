@@ -12,7 +12,6 @@ func TestBuildManifestIncludesScaffold(t *testing.T) {
 		".gitignore",
 		"00_issues/.gitkeep",
 		"01_planning/personas/analyst.md",
-		"src/apps/.gitkeep",
 	} {
 		if _, ok := m.Files[rel]; !ok {
 			t.Errorf("manifest missing %q", rel)

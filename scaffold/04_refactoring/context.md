@@ -7,7 +7,7 @@ Owns the **review** and **security** passes after implementation.
 - `personas/security.md` — vulnerability classes and security debt
 
 ## Input (read)
-- app code (the change and its seams; see `.tomo/settings.json` → `outputDir` + `projectType`)
+- target repo code (the change and its seams; see `tomo repo list`)
 - `01_planning/specs/<n>-<slug>/*` (the design the code claims to implement)
 
 ## Output (write)

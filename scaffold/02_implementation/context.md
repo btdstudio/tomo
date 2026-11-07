@@ -8,10 +8,10 @@ Owns the **implement** phase.
 ## Input (read)
 - `01_planning/specs/<n>-<slug>/tasks.json` — the approved plan
 - `01_planning/specs/<n>-<slug>/design.md` — the approved design
-- relevant files under the app root (see `.tomo/settings.json` → `outputDir` + `projectType`)
+- relevant files under the target repo (see `tomo repo list`)
 
 ## Output (write)
-- code under the app root (see `.tomo/settings.json` → `outputDir` + `projectType`), touching exactly the files each task names
+- code under the target repo (see `tomo repo list`), touching exactly the files each task names
 - tests alongside the change
 
 ## Gate

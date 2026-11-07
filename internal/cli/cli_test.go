@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/btdstudio/kiso/repos"
 	"github.com/btdstudio/tomo/internal/icm"
 	"github.com/btdstudio/tomo/internal/issues"
 	"github.com/btdstudio/tomo/internal/state"
@@ -158,18 +157,25 @@ func TestCommitOnlyTakesWhatIsStaged(t *testing.T) {
 	t.Setenv("GIT_AUTHOR_EMAIL", "t@example.com")
 	t.Setenv("GIT_COMMITTER_NAME", "t")
 	t.Setenv("GIT_COMMITTER_EMAIL", "t@example.com")
+	workspace := t.TempDir()
 	root := t.TempDir()
 	gitCmd(t, root, "init", "-q")
+	if code := runCommit(workspace, []string{"-m", "x"}); code != 1 {
+		t.Fatalf("no target = %d, want 1", code)
+	}
+	if code := runRepo(workspace, []string{"add", "app", "https://github.com/org/app", "--path", root}); code != 0 {
+		t.Fatalf("repo add = %d", code)
+	}
 	for _, f := range []string{"a.txt", "b.txt"} {
 		if err := os.WriteFile(filepath.Join(root, f), []byte("x"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if code := runCommit(root, []string{"-m", "feat: a"}); code != 1 {
+	if code := runCommit(workspace, []string{"-m", "feat: a"}); code != 1 {
 		t.Fatalf("nothing staged = %d, want 1", code)
 	}
 	gitCmd(t, root, "add", "a.txt")
-	if code := runCommit(root, []string{"-m", "feat: a"}); code != 0 {
+	if code := runCommit(workspace, []string{"-m", "feat: a"}); code != 0 {
 		t.Fatalf("commit = %d", code)
 	}
 	if files := gitCmd(t, root, "show", "--name-only", "--format=", "HEAD"); strings.TrimSpace(files) != "a.txt" {
@@ -200,10 +206,23 @@ func TestRunIssuesNewAndList(t *testing.T) {
 	}
 }
 
+func TestRepoAddKeepsWorkspaceToOneTarget(t *testing.T) {
+	root := workspace(t)
+	if code := runEnv(root); code != 1 {
+		t.Fatalf("env with no target = %d, want 1", code)
+	}
+	if code := runRepo(root, []string{"add", "app", "https://github.com/org/app"}); code != 0 {
+		t.Fatalf("first = %d", code)
+	}
+	if code := runRepo(root, []string{"add", "other", "https://github.com/org/other"}); code != 1 {
+		t.Fatalf("second = %d, want 1", code)
+	}
+}
+
 func TestEnvPrintsFlagsForRegisteredRepos(t *testing.T) {
 	root := workspace(t)
 	target := t.TempDir()
-	if code := repos.Run(root, "tomo", []string{"add", "app", "https://github.com/org/app", "--path", target}, os.Stdout, os.Stderr); code != 0 {
+	if code := runRepo(root, []string{"add", "app", "https://github.com/org/app", "--path", target}); code != 0 {
 		t.Fatalf("repo add = %d", code)
 	}
 	r, w, err := os.Pipe()

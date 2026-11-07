@@ -84,6 +84,9 @@ func runUpdate() int {
 	if migrated {
 		fmt.Println("moved .tomo/state.json and .tomo/log.md to STATE.json and LOG.md — review and commit them")
 	}
+	if icm.OldAppsDir(".") {
+		fmt.Println("note: code now lives outside the workspace. src/apps/ is left as it is; register it with `tomo repo add <name> <remote> --path <dir>`")
+	}
 	rep, err := icm.Update(".")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -101,16 +104,35 @@ func runUpdate() int {
 }
 
 func runAdd(args []string) int {
-	if len(args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: tomo add kumi|hachigo <name> [module-path]")
+	usage := "usage: tomo add kumi|hachigo <name> --path <dir> --remote <url> [module-path]"
+	var pos []string
+	opts := icm.AddOptions{}
+	for i := 0; i < len(args); i++ {
+		switch a := args[i]; {
+		case a == "--path" && i+1 < len(args):
+			i++
+			opts.Path = args[i]
+		case a == "--remote" && i+1 < len(args):
+			i++
+			opts.Remote = args[i]
+		case strings.HasPrefix(a, "-"):
+			fmt.Fprintln(os.Stderr, usage)
+			return 1
+		default:
+			pos = append(pos, a)
+		}
+	}
+	if len(pos) < 2 || opts.Path == "" || opts.Remote == "" {
+		fmt.Fprintln(os.Stderr, usage)
 		return 1
 	}
-	rep, err := icm.Add(".", args[0], args[1], args[2:]...)
+	opts.Args = pos[2:]
+	rep, err := icm.Add(".", pos[0], pos[1], opts)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	fmt.Printf("added %s from %s at %s\n", args[1], rep.Source, rep.Path)
+	fmt.Printf("added %s from %s at %s — commit REPOS.json to share it\n", pos[1], rep.Source, rep.Path)
 	return 0
 }
 

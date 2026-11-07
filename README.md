@@ -24,8 +24,8 @@ go install github.com/btdstudio/tomo/cmd/tomo@latest
 |---|---|
 | `tomo init [dir]` | scaffold the ICM structure |
 | `tomo update` | refresh managed files to the installed version |
-| `tomo add kumi <name> [module-path]` | scaffold a [kumi Go+HTMX app](https://github.com/btdstudio/kumi) (location from `.tomo/settings.json`: `outputDir` + `projectType`) |
-| `tomo add hachigo <name>` | scaffold a [hachigo site](https://github.com/btdstudio/hachigo) (location from `.tomo/settings.json`: `outputDir` + `projectType`) |
+| `tomo add kumi <name> --path <dir> --remote <url> [module-path]` | scaffold a [kumi Go+HTMX app](https://github.com/btdstudio/kumi) outside the workspace and make it the target repo |
+| `tomo add hachigo <name> --path <dir> --remote <url>` | scaffold a [hachigo site](https://github.com/btdstudio/hachigo) outside the workspace and make it the target repo |
 | `tomo status` | show the active change |
 | `tomo settings` | show/merge settings |
 | `tomo switch [--all] [<change>]` | list changes, or switch the active change |
@@ -34,12 +34,12 @@ go install github.com/btdstudio/tomo/cmd/tomo@latest
 | `tomo gate <phase> <status> [--force]` | advance the active change's gate |
 | `tomo reopen <phase> --reason <r>` | move back to a phase and clear later approvals |
 | `tomo issues new\|list\|show` | manage `00_issues/` |
-| `tomo repo add\|list\|path\|doctor` | manage the repos this workspace works with |
-| `tomo env` | print harness flags for this workspace's repos |
+| `tomo repo add\|list\|path\|doctor` | manage this workspace's one target repo |
+| `tomo env` | print harness flags for the target repo |
 | `tomo doctor [--install]` | check toolchain prerequisites |
 | `tomo list` | list installed tools + versions |
-| `tomo commit [git commit args]` | commit what's staged, one micro-commit at a time |
-| `tomo pr [title]` | open a pull request via `gh` |
+| `tomo commit [git commit args]` | commit what's staged in the target repo, one micro-commit at a time |
+| `tomo pr [title]` | open a pull request for the target repo |
 | `tomo help` | usage |
 
 ## The loop
@@ -59,6 +59,9 @@ commit `STATE.json` and `LOG.md` for you, without pushing.
 
 ## The workspace
 
+A workspace holds planning and state, and targets exactly one repo, which holds the
+code. Keep each workspace in its own git repo.
+
 ```
 ├── AGENTS.md          root map + routing table + command list
 ├── STATE.json         per-change phase, gates, sources (committed)
@@ -69,8 +72,7 @@ commit `STATE.json` and `LOG.md` for you, without pushing.
 ├── 01_planning/       analyst + architect (specs, personas, templates)
 ├── 02_implementation/ coder
 ├── 03_testing/        qa
-├── 04_refactoring/    reviewer + security
-└── src/apps/          monorepo root — one dir per app
+└── 04_refactoring/    reviewer + security
 ```
 
 ## Development

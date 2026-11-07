@@ -52,9 +52,9 @@ func Run(args []string) int {
 	case "commit":
 		return runCommit(root, args[1:])
 	case "pr":
-		return runPR(args[1:])
+		return runPR(root, args[1:])
 	case "repo":
-		return repos.Run(root, "tomo", args[1:], os.Stdout, os.Stderr)
+		return runRepo(root, args[1:])
 	case "env":
 		return runEnv(root)
 	default:
@@ -71,7 +71,8 @@ func PrintUsage() {
 Usage:
   tomo init [dir] [--no-git] [--force]   scaffold the ICM structure
   tomo update                             refresh managed files
-  tomo add kumi|hachigo <name> [module]   scaffold an app into <outputDir>/apps/<name>/ (default src/apps/)
+  tomo add kumi|hachigo <name> --path <p> --remote <url> [module]
+                                          scaffold an app outside the workspace and target it
   tomo status                             show the active change
   tomo settings                           show effective settings
   tomo switch [--all] [<change>]          list changes, or switch the active one
@@ -81,11 +82,11 @@ Usage:
   tomo gate <phase> <status> [--force]    advance the active change's gate
   tomo reopen <phase> --reason <r>        move back to a phase, clearing later approvals
   tomo issues new|list|show [args]        manage 00_issues/
-` + repos.Usage("tomo") + `  tomo env                                print harness flags for this workspace's repos
+` + repos.Usage("tomo") + `  tomo env                                print harness flags for the target repo
   tomo doctor [--install]                 check toolchain prerequisites
   tomo list                               list installed tools + versions
-  tomo commit [git commit args]           commit what's staged, one micro-commit at a time
-  tomo pr [title]                         open a pull request via gh
+  tomo commit [git commit args]           commit what's staged in the target repo
+  tomo pr [title]                         open a pull request for the target repo via gh
   tomo help                               this help
 `)
 }
@@ -121,10 +122,7 @@ func runSettings(root string) int {
 	fmt.Printf("baseSource:  %s\n", e.BaseSource)
 	fmt.Printf("gates:       %s\n", e.Gates)
 	fmt.Printf("artifactDir: %s\n", e.ArtifactDir)
-	fmt.Printf("issues:      %s\n", e.Issues)
 	fmt.Printf("issuesDir:   %s\n", e.IssuesDir)
-	fmt.Printf("outputDir:   %s\n", e.OutputDir)
-	fmt.Printf("projectType: %s\n", e.ProjectType)
 	for k, v := range e.AppSources {
 		fmt.Printf("appSource.%s: %s\n", k, v)
 	}
@@ -354,15 +352,25 @@ func runReopen(root string, args []string) int {
 	return 0
 }
 
-// runEnv prints harness flags for every registered repo. Unlike a zumen change,
-// which picks from many repos, a tomo workspace works on the repos it registers.
+// runRepo handles `tomo repo`, keeping a workspace to its one target repo.
+func runRepo(root string, args []string) int {
+	if len(args) > 0 && args[0] == "add" {
+		if err := icm.RefuseSecondTarget(root); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+	}
+	return repos.Run(root, "tomo", args, os.Stdout, os.Stderr)
+}
+
+// runEnv prints harness flags for the target repo.
 func runEnv(root string) int {
-	reg, err := repos.Load(root, "tomo")
+	name, _, err := icm.Target(root)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	return repos.RunEnv(root, "tomo", reg.Names(), os.Stdout, os.Stderr)
+	return repos.RunEnv(root, "tomo", []string{name}, os.Stdout, os.Stderr)
 }
 
 func runIssues(root string, args []string) int {
@@ -553,28 +561,39 @@ func goToolVersion(bin string) string {
 	return "unknown"
 }
 
-// runCommit commits only what's staged, so each commit is a reviewed micro-commit
-// rather than everything in the tree. Extra arguments go to `git commit`.
+// runCommit commits only what's staged in the target repo, so each commit is a
+// reviewed micro-commit rather than everything in the tree. Extra arguments go to
+// `git commit`.
 func runCommit(root string, args []string) int {
+	_, target, err := icm.Target(root)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
 	staged := exec.Command("git", "diff", "--cached", "--quiet")
-	staged.Dir = root
+	staged.Dir = target
 	if err := staged.Run(); err == nil {
 		fmt.Fprintln(os.Stderr, "tomo commit: nothing staged — stage one logical change with `git add`, then commit it")
 		return 1
 	}
-	if err := run(root, "git", append([]string{"commit"}, args...)...); err != nil {
+	if err := run(target, "git", append([]string{"commit"}, args...)...); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 	return 0
 }
 
-func runPR(args []string) int {
+func runPR(root string, args []string) int {
+	_, target, err := icm.Target(root)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
 	ghArgs := []string{"pr", "create"}
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		ghArgs = append(ghArgs, "--title", args[0])
 	}
-	if err := run(".", "gh", ghArgs...); err != nil {
+	if err := run(target, "gh", ghArgs...); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
