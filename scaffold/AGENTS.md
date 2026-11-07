@@ -29,24 +29,28 @@ tomo, which folds test authoring into the coder and adequacy into the reviewer.
 | `tomo add hachigo <name>` | scaffold a hachigo site (location from `.tomo/settings.json`: `outputDir` + `projectType`) |
 | `tomo status` | show the active change's phase/status |
 | `tomo settings` | show/merge settings |
-| `tomo switch <change>` | switch the active change |
+| `tomo switch [--all] [<change>]` | list changes (`--all` includes closed ones), or switch the active change |
+| `tomo change new <title> [--issue <id>]` | create a change + issue + switch |
+| `tomo change close <change> --reason <r>` | close a change |
+| `tomo gate <phase> <status> [--force]` | advance the active change's gate (earlier phases must be finished) |
+| `tomo reopen <phase> --reason <r>` | move back to a phase and clear later approvals |
 | `tomo issues new|list|show` | manage `00_issues/` |
 | `tomo doctor [--install]` | check toolchain prerequisites |
 | `tomo list` | list installed tools + versions |
-| `tomo commit` | propose conventional micro-commits |
+| `tomo commit [git commit args]` | commit what's staged. Split work into reviewed micro-commits: propose the groups, stage one, commit it with a conventional message, repeat |
 | `tomo pr [title]` | open a pull request |
 | `tomo help` | usage |
 
 The folders/personas below describe *what* to do; `tomo` is a plain CLI — run
-it like `git` or `gh`. Prefer `tomo <command>` over hand-editing `.tomo/` or
+it like `git` or `gh`. Prefer `tomo <command>` over hand-editing `STATE.json` or
 `00_issues/` when the binary is on your PATH.
 
 ## How to start a change
 
-1. **Create an issue** — drop `00_issues/<id>.md` (or run `tomo issues new`).
-2. **Point the workspace at it** — set `baseSource` in `.tomo/settings.json`.
-3. **Seed the change** in `.tomo/state.json` (a `<n>-<slug>` id, `phase: requirements`).
-4. **Kick off** with a prompt like: *"Start the loop on `00_issues/1.md`."*
+1. **Create a change** — `tomo change new "Title"`. This writes the issue
+   (`00_issues/<id>.md`), makes a `01_planning/specs/<n>-<slug>/` folder, seeds
+   `STATE.json`, and switches to it. Use `--issue <id>` for an existing issue.
+2. **Kick off** with a prompt like: *"Start the loop on `00_issues/1.md`."*
 
 ## Routing table
 
@@ -72,7 +76,13 @@ it like `git` or `gh`. Prefer `tomo <command>` over hand-editing `.tomo/` or
 
 - Requirements before design; design before plan; plan before implement.
 - Each phase stops at a gate for human approval — never proceed past a gate on
-  your own (tracked in `.tomo/state.json`).
+  your own. Record transitions with `tomo gate <phase> <status>`, never by editing
+  `STATE.json`. `--force` overrides the order check and is logged; only use it
+  when a human says so.
+- Use `tomo reopen <phase> --reason <r>` to go back: it clears the approvals after
+  that phase, because they no longer hold.
+- `tomo change new`, `gate`, `reopen` and `change close` commit `STATE.json` and
+  `LOG.md` for you, leaving anything else you have staged alone. They don't push.
 - Read only the files the routing table names for your task; skip the rest.
 - App code location comes from `.tomo/settings.json`: `outputDir` (default `src`)
   and `projectType` (`monorepo` default → `<outputDir>/apps/<name>/`;
@@ -91,7 +101,10 @@ it like `git` or `gh`. Prefer `tomo <command>` over hand-editing `.tomo/` or
 ├── CLAUDE.md
 ├── AGENTS.md
 ├── .gitignore
-├── .tomo/                # workspace state (settings/state/log/manifest)
+├── .gitattributes
+├── STATE.json            # per-change phase, gates, sources (committed)
+├── LOG.md                # gate history (committed)
+├── .tomo/                # settings + manifest (committed), active change (local)
 ├── 00_issues/            # local issue store (<id>.md)
 ├── 01_planning/          # analyst + architect
 ├── 02_implementation/    # coder

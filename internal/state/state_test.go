@@ -39,7 +39,7 @@ func TestLoadStateReturnsDefaultWhenAbsent(t *testing.T) {
 func TestSaveThenLoadRoundtripsAndStampsUpdatedAt(t *testing.T) {
 	root := t.TempDir()
 	st := DefaultState()
-	if err := SetGate(&st, "requirements", "await-approval"); err != nil {
+	if err := SetGate(&st, "requirements", "await-approval", ""); err != nil {
 		t.Fatal(err)
 	}
 	st.Sources = []string{"specs/prd.md"}
@@ -67,59 +67,46 @@ func TestSaveThenLoadRoundtripsAndStampsUpdatedAt(t *testing.T) {
 
 func TestSetGateUpdatesPhaseStatusAndMap(t *testing.T) {
 	st := DefaultState()
-	if err := SetGate(&st, "design", "draft"); err != nil {
+	if err := SetGate(&st, "design", "draft", ""); err != nil {
 		t.Fatal(err)
 	}
-	if st.Phase != "design" || st.Status != "draft" || st.Gates.Design != "draft" {
-		t.Fatalf("phase/status/gates.design = %q/%q/%q", st.Phase, st.Status, st.Gates.Design)
+	if st.Phase != "design" || st.Status != "draft" || st.Gates["design"] != "draft" {
+		t.Fatalf("phase/status/gates.design = %q/%q/%q", st.Phase, st.Status, st.Gates["design"])
 	}
-	if st.Gates.Requirements != "" {
-		t.Fatalf("gates.requirements should stay empty, got %q", st.Gates.Requirements)
+	if st.Gates["requirements"] != "" {
+		t.Fatalf("gates.requirements should stay empty, got %q", st.Gates["requirements"])
 	}
 }
 
 func TestSetGateRejectsUnknownPhaseAndStatus(t *testing.T) {
 	st := DefaultState()
-	if err := SetGate(&st, "bogus", "draft"); err == nil || !strings.Contains(err.Error(), "unknown phase") {
+	if err := SetGate(&st, "bogus", "draft", ""); err == nil || !strings.Contains(err.Error(), "unknown phase") {
 		t.Fatalf("want unknown phase error, got %v", err)
 	}
-	if err := SetGate(&st, "plan", "nope"); err == nil || !strings.Contains(err.Error(), "unknown gate status") {
+	if err := SetGate(&st, "plan", "nope", ""); err == nil || !strings.Contains(err.Error(), "unknown gate status") {
 		t.Fatalf("want unknown gate status error, got %v", err)
-	}
-}
-
-func TestDefaultStateSeedsEveryPhase(t *testing.T) {
-	if !reflect.DeepEqual(PHASES, []string{"requirements", "design", "plan", "implement"}) {
-		t.Fatalf("PHASES = %v", PHASES)
-	}
-	if !reflect.DeepEqual(IMPLEMENT_STATES, []string{"", "in-progress", "complete"}) {
-		t.Fatalf("IMPLEMENT_STATES = %v", IMPLEMENT_STATES)
-	}
-	g := DefaultState().Gates
-	if g.Requirements != "" || g.Design != "" || g.Plan != "" || g.Implement != "" {
-		t.Fatalf("gates should be all empty, got %+v", g)
 	}
 }
 
 func TestImplementUsesRunPhaseStatuses(t *testing.T) {
 	st := DefaultState()
-	if err := SetGate(&st, "implement", "in-progress"); err != nil {
+	if err := SetGate(&st, "implement", "in-progress", ""); err != nil {
 		t.Fatal(err)
 	}
-	if st.Phase != "implement" || st.Status != "in-progress" || st.Gates.Implement != "in-progress" {
+	if st.Phase != "implement" || st.Status != "in-progress" || st.Gates["implement"] != "in-progress" {
 		t.Fatalf("implement in-progress: %+v", st)
 	}
-	if err := SetGate(&st, "implement", "complete"); err != nil {
+	if err := SetGate(&st, "implement", "complete", ""); err != nil {
 		t.Fatal(err)
 	}
-	if st.Status != "complete" || st.Gates.Implement != "complete" {
+	if st.Status != "complete" || st.Gates["implement"] != "complete" {
 		t.Fatalf("implement complete: %+v", st)
 	}
-	if err := SetGate(&st, "implement", "draft"); err == nil || !strings.Contains(err.Error(), "unknown implement status") {
-		t.Fatalf("want unknown implement status (draft), got %v", err)
+	if err := SetGate(&st, "implement", "draft", ""); err == nil || !strings.Contains(err.Error(), "unknown gate status") {
+		t.Fatalf("want unknown gate status (draft), got %v", err)
 	}
-	if err := SetGate(&st, "implement", "approved"); err == nil || !strings.Contains(err.Error(), "unknown implement status") {
-		t.Fatalf("want unknown implement status (approved), got %v", err)
+	if err := SetGate(&st, "implement", "approved", ""); err == nil || !strings.Contains(err.Error(), "unknown gate status") {
+		t.Fatalf("want unknown gate status (approved), got %v", err)
 	}
 }
 
@@ -129,8 +116,8 @@ func TestSaveStateWritesSlimShapeAndLoadResolves(t *testing.T) {
 	os.MkdirAll(filepath.Join(SpecsDir(root, ""), "2-beta"), 0o755)
 
 	a := DefaultState()
-	a.Change = "1-alpha"
-	if err := SetGate(&a, "requirements", "approved"); err != nil {
+	a.Name = "1-alpha"
+	if err := SetGate(&a, "requirements", "approved", ""); err != nil {
 		t.Fatal(err)
 	}
 	a.Sources = []string{"prd.md"}
@@ -142,7 +129,7 @@ func TestSaveStateWritesSlimShapeAndLoadResolves(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := SetGate(&b, "design", "draft"); err != nil {
+	if err := SetGate(&b, "design", "draft", ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := SaveState(root, &b); err != nil {
@@ -153,31 +140,35 @@ func TestSaveStateWritesSlimShapeAndLoadResolves(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var sf stateFile
+	var sf struct {
+		Schema  int               `json:"schema"`
+		Changes map[string]*State `json:"changes"`
+	}
 	if err := json.Unmarshal(raw, &sf); err != nil {
 		t.Fatal(err)
 	}
-	// Top-level key order: change, updatedAt, changes.
-	s := string(raw)
-	ci, ui, chi := strings.Index(s, `"change"`), strings.Index(s, `"updatedAt"`), strings.Index(s, `"changes"`)
-	if !(ci >= 0 && ci < ui && ui < chi) {
-		t.Fatalf("top-level key order wrong: change=%d updatedAt=%d changes=%d\n%s", ci, ui, chi, s)
+	if sf.Schema != 1 {
+		t.Fatalf("schema = %d", sf.Schema)
 	}
-	if sf.Change != "2-beta" {
-		t.Fatalf("change = %q", sf.Change)
+	// The active change is local, not shared.
+	if strings.Contains(string(raw), `"change"`) {
+		t.Fatalf("STATE.json names an active change:\n%s", raw)
 	}
-	if sf.Changes["1-alpha"].Gates.Requirements != "approved" {
-		t.Fatalf("1-alpha requirements = %q", sf.Changes["1-alpha"].Gates.Requirements)
+	if name, err := ReadActive(root); err != nil || name != "2-beta" {
+		t.Fatalf("active = %q, %v", name, err)
 	}
-	if sf.Changes["2-beta"].Gates.Design != "draft" {
-		t.Fatalf("2-beta design = %q", sf.Changes["2-beta"].Gates.Design)
+	if sf.Changes["1-alpha"].Gates["requirements"] != "approved" {
+		t.Fatalf("1-alpha requirements = %q", sf.Changes["1-alpha"].Gates["requirements"])
+	}
+	if sf.Changes["2-beta"].Gates["design"] != "draft" {
+		t.Fatalf("2-beta design = %q", sf.Changes["2-beta"].Gates["design"])
 	}
 
 	active, err := LoadState(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if active.Change != "2-beta" || active.Phase != "design" || active.Status != "draft" {
+	if active.Name != "2-beta" || active.Phase != "design" || active.Status != "draft" {
 		t.Fatalf("active = %+v", active)
 	}
 
@@ -190,25 +181,6 @@ func TestSaveStateWritesSlimShapeAndLoadResolves(t *testing.T) {
 	}
 	if !reflect.DeepEqual(switched.Sources, []string{"prd.md"}) {
 		t.Fatalf("switched sources = %v", switched.Sources)
-	}
-}
-
-func TestLegacyThreeGateStateStillLoads(t *testing.T) {
-	root := t.TempDir()
-	os.MkdirAll(SpecsDir(root, ""), 0o755)
-	writeJSON(t, StatePath(root), map[string]any{
-		"phase":   "plan",
-		"status":  "approved",
-		"gates":   map[string]string{"requirements": "approved", "design": "approved", "plan": "approved"},
-		"sources": []string{"legacy"},
-		"change":  "1-legacy",
-	})
-	loaded, err := LoadState(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if loaded.Gates.Implement != "" || loaded.Gates.Plan != "approved" {
-		t.Fatalf("gates = %+v", loaded.Gates)
 	}
 }
 
@@ -272,8 +244,8 @@ func TestEachChangeKeepsOwnMachine(t *testing.T) {
 	os.MkdirAll(filepath.Join(SpecsDir(root, ""), "2-wrappers"), 0o755)
 
 	st := DefaultState()
-	st.Change = "1-local-issue-store"
-	if err := SetGate(&st, "plan", "approved"); err != nil {
+	st.Name = "1-local-issue-store"
+	if err := SetGate(&st, "plan", "approved", ""); err != nil {
 		t.Fatal(err)
 	}
 	st.Sources = []string{"inline statement"}
@@ -285,7 +257,7 @@ func TestEachChangeKeepsOwnMachine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if other.Change != "2-wrappers" || other.Phase != "" || other.Status != "" {
+	if other.Name != "2-wrappers" || other.Phase != "" || other.Status != "" {
 		t.Fatalf("fresh folder = %+v", other)
 	}
 
@@ -293,14 +265,14 @@ func TestEachChangeKeepsOwnMachine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if back.Change != "1-local-issue-store" || back.Phase != "plan" || back.Status != "approved" {
+	if back.Name != "1-local-issue-store" || back.Phase != "plan" || back.Status != "approved" {
 		t.Fatalf("back = %+v", back)
 	}
 	if !reflect.DeepEqual(back.Sources, []string{"inline statement"}) {
 		t.Fatalf("back sources = %v", back.Sources)
 	}
-	if back.Gates.Plan != "approved" {
-		t.Fatalf("back gates.plan = %q", back.Gates.Plan)
+	if back.Gates["plan"] != "approved" {
+		t.Fatalf("back gates.plan = %q", back.Gates["plan"])
 	}
 }
 
@@ -329,8 +301,8 @@ func TestSwitchRejectsUnknownsAndKnownChangesLists(t *testing.T) {
 	}
 
 	st := DefaultState()
-	st.Change = "1-a"
-	if err := SetGate(&st, "requirements", "await-approval"); err != nil {
+	st.Name = "1-a"
+	if err := SetGate(&st, "requirements", "await-approval", ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := SaveState(root, &st); err != nil {
@@ -362,7 +334,7 @@ func TestAppendLog(t *testing.T) {
 	if err := AppendLog(root, "requirements approved"); err != nil {
 		t.Fatal(err)
 	}
-	b, _ := os.ReadFile(filepath.Join(root, ".tomo", "log.md"))
+	b, _ := os.ReadFile(LogPath(root))
 	lines := strings.Split(strings.TrimSpace(string(b)), "\n")
 	if len(lines) != 2 {
 		t.Fatalf("lines = %d", len(lines))
@@ -380,7 +352,7 @@ func TestUpdatedAtFormatMatchesJSISOString(t *testing.T) {
 	defer func() { Now = orig }()
 	Now = fixedNow(time.Date(2026, 10, 24, 9, 41, 59, 123000000, time.UTC))
 	st := DefaultState()
-	st.Change = "1-x"
+	st.Name = "1-x"
 	if err := SaveState(t.TempDir(), &st); err != nil {
 		t.Fatal(err)
 	}
@@ -405,8 +377,8 @@ func TestSwitchToHonorsCustomArtifactDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Change != "1-x" {
-		t.Fatalf("change = %q", st.Change)
+	if st.Name != "1-x" {
+		t.Fatalf("change = %q", st.Name)
 	}
 }
 
@@ -417,5 +389,153 @@ func TestSpecsDirDefaultsAndCustom(t *testing.T) {
 	}
 	if got := SpecsDir(root, "custom/specs"); got != filepath.Join(root, "custom", "specs") {
 		t.Fatalf("custom specs dir = %q", got)
+	}
+}
+
+func TestPhases(t *testing.T) {
+	var names []string
+	for _, p := range Machine.Phases {
+		names = append(names, p.Name)
+	}
+	if !reflect.DeepEqual(names, []string{"requirements", "design", "plan", "implement"}) {
+		t.Fatalf("phases = %v", names)
+	}
+}
+
+func TestCheckGateRequiresImplementComplete(t *testing.T) {
+	st := State{Gates: map[string]string{"requirements": "approved", "design": "draft"}}
+	if err := CheckGate(st, "plan", "draft"); err == nil || !strings.Contains(err.Error(), "requires design") {
+		t.Fatalf("err = %v", err)
+	}
+	st.Gates["design"] = "approved"
+	if err := CheckGate(st, "plan", "draft"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func writeOld(t *testing.T, root, body, log string) {
+	t.Helper()
+	if err := os.MkdirAll(Workspace(root), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(oldStatePath(root), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(oldLogPath(root), []byte(log), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestOldStateIsRefusedUntilMigrated(t *testing.T) {
+	root := t.TempDir()
+	writeOld(t, root, `{"change":"","updatedAt":"","changes":{}}`, "")
+	if _, err := LoadState(root); err == nil || !strings.Contains(err.Error(), "tomo update") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestMigrateMovesStateLogAndActive(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(ChangeDir(root, "1-alpha", ""), 0o755)
+	writeOld(t, root, `{
+  "change": "1-alpha",
+  "updatedAt": "2026-10-24T00:00:00.000Z",
+  "changes": {
+    "1-alpha": {"phase":"plan","status":"approved","gates":{"requirements":"approved","design":"approved","plan":"approved","implement":""},"sources":["00_issues/1.md"]},
+    "2-beta": {"phase":"design","status":"draft","gates":{"requirements":"approved","design":"draft","plan":"","implement":""},"sources":[]},
+    "": {"phase":"","status":"","gates":{},"sources":[]}
+  }
+}`, "- 2026-10-24T00:00:00.000Z old line\n")
+	migrated, err := MigrateOldState(root)
+	if err != nil || !migrated {
+		t.Fatalf("migrated = %v, err = %v", migrated, err)
+	}
+	st, err := LoadState(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"requirements": "approved", "design": "approved", "plan": "approved"}
+	if st.Name != "1-alpha" || st.Status != "approved" || !reflect.DeepEqual(st.Gates, want) {
+		t.Fatalf("st = %+v", st)
+	}
+	if st.UpdatedAt != "2026-10-24T00:00:00.000Z" || !reflect.DeepEqual(st.Sources, []string{"00_issues/1.md"}) {
+		t.Fatalf("st = %+v", st)
+	}
+	changes, err := ReadChanges(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changes) != 2 || changes["2-beta"].Gates["design"] != "draft" {
+		t.Fatalf("changes = %+v", changes)
+	}
+	log, _ := os.ReadFile(LogPath(root))
+	if !strings.Contains(string(log), "old line") || !strings.Contains(string(log), "migrated from") {
+		t.Fatalf("log = %q", log)
+	}
+	for _, p := range []string{oldStatePath(root), oldLogPath(root)} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Fatalf("%s not removed: %v", p, err)
+		}
+	}
+	if again, err := MigrateOldState(root); err != nil || again {
+		t.Fatalf("second migration = %v, %v", again, err)
+	}
+}
+
+func TestMigrateCarriesTopLevelMachine(t *testing.T) {
+	root := t.TempDir()
+	writeOld(t, root, `{"phase":"plan","status":"approved","gates":{"requirements":"approved","design":"approved","plan":"approved"},"sources":["legacy"],"change":"1-legacy","updatedAt":"2026-10-01T00:00:00.000Z"}`, "")
+	if _, err := MigrateOldState(root); err != nil {
+		t.Fatal(err)
+	}
+	st, err := LoadState(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Name != "1-legacy" || st.Phase != "plan" || st.Gates["plan"] != "approved" || !reflect.DeepEqual(st.Sources, []string{"legacy"}) {
+		t.Fatalf("st = %+v", st)
+	}
+}
+
+func TestMigrateReplacesEmptySeedButNotRecordedChanges(t *testing.T) {
+	root := t.TempDir()
+	writeOld(t, root, `{"change":"1-x","changes":{"1-x":{"phase":"design","status":"draft","gates":{"design":"draft"}}}}`, "")
+	if err := os.WriteFile(StatePath(root), []byte(`{"schema":1,"changes":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := MigrateOldState(root); err != nil {
+		t.Fatal(err)
+	}
+	recorded, _ := os.ReadFile(StatePath(root))
+	writeOld(t, root, `{"change":"2-y","changes":{"2-y":{"phase":"design","status":"draft"}}}`, "")
+	if _, err := MigrateOldState(root); err == nil || !strings.Contains(err.Error(), "both") {
+		t.Fatalf("err = %v", err)
+	}
+	if after, _ := os.ReadFile(StatePath(root)); string(after) != string(recorded) {
+		t.Fatalf("STATE.json overwritten: %s", after)
+	}
+}
+
+func TestMigrateReportsCorruptFileAndLeavesIt(t *testing.T) {
+	root := t.TempDir()
+	writeOld(t, root, `{`, "")
+	if _, err := MigrateOldState(root); err == nil || !strings.Contains(err.Error(), "cannot parse") {
+		t.Fatalf("err = %v", err)
+	}
+	if got, _ := os.ReadFile(oldStatePath(root)); string(got) != "{" {
+		t.Fatalf("old file changed: %q", got)
+	}
+}
+
+func TestEarlierLayoutIsRefused(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(Workspace(root), "specs", "1-x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadState(root); err == nil || !strings.Contains(err.Error(), "earlier layout") {
+		t.Fatalf("LoadState err = %v", err)
+	}
+	if _, err := MigrateOldState(root); err == nil || !strings.Contains(err.Error(), "earlier layout") {
+		t.Fatalf("MigrateOldState err = %v", err)
 	}
 }

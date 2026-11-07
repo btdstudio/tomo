@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 
+	kiso "github.com/btdstudio/kiso/state"
 	"github.com/btdstudio/kiso/version"
 	"github.com/btdstudio/tomo/internal/icm"
 	"github.com/btdstudio/tomo/internal/issues"
@@ -34,6 +36,12 @@ func Run(args []string) int {
 		return runSettings(root)
 	case "switch":
 		return runSwitch(root, args[1:])
+	case "change":
+		return runChange(root, args[1:])
+	case "gate":
+		return runGate(root, args[1:])
+	case "reopen":
+		return runReopen(root, args[1:])
 	case "issues":
 		return runIssues(root, args[1:])
 	case "doctor":
@@ -41,7 +49,7 @@ func Run(args []string) int {
 	case "list", "ls":
 		return runList(root)
 	case "commit":
-		return runCommit(root)
+		return runCommit(root, args[1:])
 	case "pr":
 		return runPR(args[1:])
 	default:
@@ -61,11 +69,16 @@ Usage:
   tomo add kumi|hachigo <name> [module]   scaffold an app into <outputDir>/apps/<name>/ (default src/apps/)
   tomo status                             show the active change
   tomo settings                           show effective settings
-  tomo switch <change>                    switch the active change
+  tomo switch [--all] [<change>]          list changes, or switch the active one
+  tomo change new <title> [--issue <id>] [--body <b>]
+                                          create a change + issue + switch
+  tomo change close <change> --reason <r> close a change
+  tomo gate <phase> <status> [--force]    advance the active change's gate
+  tomo reopen <phase> --reason <r>        move back to a phase, clearing later approvals
   tomo issues new|list|show [args]        manage 00_issues/
   tomo doctor [--install]                 check toolchain prerequisites
   tomo list                               list installed tools + versions
-  tomo commit                             stage all + commit (conventional)
+  tomo commit [git commit args]           commit what's staged, one micro-commit at a time
   tomo pr [title]                         open a pull request via gh
   tomo help                               this help
 `)
@@ -77,15 +90,18 @@ func runStatus(root string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	if st.Change == "" {
+	if st.Name == "" {
 		fmt.Println("no active change")
 		return 0
 	}
-	fmt.Printf("change:   %s\n", st.Change)
+	fmt.Printf("change:   %s\n", st.Name)
 	fmt.Printf("phase:    %s\n", st.Phase)
 	fmt.Printf("status:   %s\n", st.Status)
-	fmt.Printf("gates:    requirements=%s design=%s plan=%s implement=%s\n",
-		st.Gates.Requirements, st.Gates.Design, st.Gates.Plan, st.Gates.Implement)
+	var gates []string
+	for _, p := range state.Machine.Phases {
+		gates = append(gates, p.Name+"="+st.Gates[p.Name])
+	}
+	fmt.Printf("gates:    %s\n", strings.Join(gates, " "))
 	return 0
 }
 
@@ -110,8 +126,75 @@ func runSettings(root string) int {
 }
 
 func runSwitch(root string, args []string) int {
+	loaded, err := settings.LoadSettings(root)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	artifactDir := loaded.Effective.ArtifactDir
+	all := len(args) > 0 && args[0] == "--all"
+	if all {
+		args = args[1:]
+	}
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: tomo switch <change>")
+		changes, err := state.KnownChanges(root, artifactDir)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		if len(changes) == 0 {
+			fmt.Println("no changes yet — run `tomo change new <title>`")
+			return 0
+		}
+		for _, c := range changes {
+			if c.Status == kiso.Closed && !all {
+				continue
+			}
+			fmt.Printf("%s  %s %s\n", c.Name, c.Phase, c.Status)
+		}
+		return 0
+	}
+	st, err := state.SwitchTo(root, args[0], artifactDir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	fmt.Printf("switched to %s\n", st.Name)
+	return 0
+}
+
+// gatePolicy decides whether a gate violation stops the command: "block" refuses
+// it unless forced; "prompt", "auto" and a forced run warn and proceed.
+func gatePolicy(gates string, violation error, force bool) error {
+	if gates == "block" && !force {
+		return fmt.Errorf("%v (pass --force to override)", violation)
+	}
+	fmt.Fprintf(os.Stderr, "warning: %v\n", violation)
+	return nil
+}
+
+// parseTransition splits positional arguments from --reason and --force.
+func parseTransition(args []string) (pos []string, reason string, force bool, err error) {
+	for i := 0; i < len(args); i++ {
+		switch a := args[i]; {
+		case a == "--force":
+			force = true
+		case a == "--reason" && i+1 < len(args):
+			i++
+			reason = args[i]
+		case strings.HasPrefix(a, "-"):
+			return nil, "", false, fmt.Errorf("unknown flag %q", a)
+		default:
+			pos = append(pos, a)
+		}
+	}
+	return pos, reason, force, nil
+}
+
+func runChange(root string, args []string) int {
+	usage := "usage: tomo change new <title> [--issue <id>] [--body <b>]\n       tomo change close <change> --reason <r>"
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, usage)
 		return 1
 	}
 	loaded, err := settings.LoadSettings(root)
@@ -119,12 +202,149 @@ func runSwitch(root string, args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	st, err := state.SwitchTo(root, args[0], loaded.Effective.ArtifactDir)
+	switch args[0] {
+	case "new":
+		return runChangeNew(root, loaded.Effective, args[1:])
+	case "close":
+		pos, reason, _, err := parseTransition(args[1:])
+		if err != nil || len(pos) != 1 {
+			fmt.Fprintln(os.Stderr, "usage: tomo change close <change> --reason <r>")
+			return 1
+		}
+		st, err := state.CloseChange(root, loaded.Effective.ArtifactDir, pos[0], reason)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		fmt.Printf("%s: closed\n", st.Name)
+		return 0
+	}
+	fmt.Fprintln(os.Stderr, usage)
+	return 1
+}
+
+func runChangeNew(root string, e settings.Settings, args []string) int {
+	usage := "usage: tomo change new <title> [--issue <id>] [--body <b>]"
+	var title, body string
+	issueID := 0
+	for i := 0; i < len(args); i++ {
+		switch a := args[i]; {
+		case a == "--issue" && i+1 < len(args):
+			i++
+			id, err := strconv.Atoi(args[i])
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "invalid id: %s\n", args[i])
+				return 1
+			}
+			issueID = id
+		case a == "--body" && i+1 < len(args):
+			i++
+			body = args[i]
+		case strings.HasPrefix(a, "-"):
+			fmt.Fprintf(os.Stderr, "tomo change new: unknown flag %q\n", a)
+			return 1
+		case title != "":
+			fmt.Fprintf(os.Stderr, "tomo change new: unexpected argument %q (quote a multi-word title)\n", a)
+			return 1
+		default:
+			title = a
+		}
+	}
+	if title == "" {
+		fmt.Fprintln(os.Stderr, usage)
+		return 1
+	}
+	// Fail on unreadable state before writing the issue and spec folder.
+	if _, err := state.LoadState(root); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	if issueID != 0 {
+		if _, err := issues.ReadIssue(root, e.IssuesDir, issueID); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+	} else {
+		it, err := issues.WriteNewIssue(root, e.IssuesDir, issues.NewIssueOptions{Title: title, Body: body})
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		issueID = it.ID
+	}
+	slug := state.Slugify(title)
+	if slug == "" {
+		slug = "change"
+	}
+	name := fmt.Sprintf("%d-%s", state.NextChangeId(root, e.ArtifactDir), slug)
+	rel := filepath.ToSlash(filepath.Join(e.IssuesDir, fmt.Sprintf("%d.md", issueID)))
+	st, err := state.SeedChange(root, name, e.ArtifactDir, []string{rel})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	fmt.Printf("switched to %s\n", st.Change)
+	fmt.Printf("created change %s (issue #%d)\n", st.Name, issueID)
+	return 0
+}
+
+func runGate(root string, args []string) int {
+	pos, reason, force, err := parseTransition(args)
+	if err != nil || len(pos) != 2 {
+		fmt.Fprintln(os.Stderr, "usage: tomo gate <phase> <status> [--reason <r>] [--force]")
+		return 1
+	}
+	phase, status := pos[0], pos[1]
+	loaded, err := settings.LoadSettings(root)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	st, err := state.LoadState(root)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	var notes []string
+	if st.Name != "" {
+		probe := st
+		if err := state.SetGate(&probe, phase, status, reason); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		if violation := state.CheckGate(st, phase, status); violation != nil {
+			if err := gatePolicy(loaded.Effective.Gates, violation, force); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				return 1
+			}
+			notes = append(notes, "override: "+violation.Error())
+		}
+	}
+	st, err = state.AdvanceGate(root, loaded.Effective.ArtifactDir, phase, status, reason, notes...)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	fmt.Printf("%s: %s = %s\n", st.Name, st.Phase, st.Status)
+	return 0
+}
+
+func runReopen(root string, args []string) int {
+	pos, reason, _, err := parseTransition(args)
+	if err != nil || len(pos) != 1 {
+		fmt.Fprintln(os.Stderr, "usage: tomo reopen <phase> --reason <r>")
+		return 1
+	}
+	loaded, err := settings.LoadSettings(root)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	st, err := state.Reopen(root, loaded.Effective.ArtifactDir, pos[0], reason)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	fmt.Printf("%s: %s = %s\n", st.Name, st.Phase, st.Status)
 	return 0
 }
 
@@ -316,12 +536,16 @@ func goToolVersion(bin string) string {
 	return "unknown"
 }
 
-func runCommit(root string) int {
-	if err := run(root, "git", "add", "-A"); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+// runCommit commits only what's staged, so each commit is a reviewed micro-commit
+// rather than everything in the tree. Extra arguments go to `git commit`.
+func runCommit(root string, args []string) int {
+	staged := exec.Command("git", "diff", "--cached", "--quiet")
+	staged.Dir = root
+	if err := staged.Run(); err == nil {
+		fmt.Fprintln(os.Stderr, "tomo commit: nothing staged — stage one logical change with `git add`, then commit it")
 		return 1
 	}
-	if err := run(root, "git", "commit"); err != nil {
+	if err := run(root, "git", append([]string{"commit"}, args...)...); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}

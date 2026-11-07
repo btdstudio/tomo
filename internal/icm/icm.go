@@ -7,11 +7,13 @@ import (
 	"io/fs"
 
 	"github.com/btdstudio/kiso/scaffold"
+	kiso "github.com/btdstudio/kiso/state"
 	"github.com/btdstudio/tomo"
 	"github.com/btdstudio/tomo/internal/settings"
 )
 
-// WorkspaceDir is the per-project state directory (gitignored).
+// WorkspaceDir is the per-project config directory. It is committed, except for
+// the local .tomo/active pointer and .tomo/SLIP.md handoff.
 const WorkspaceDir = ".tomo"
 
 type (
@@ -36,7 +38,7 @@ func mustSub(fsys fs.FS, dir string) fs.FS {
 	return sub
 }
 
-// seeds generates the .tomo/ settings, state and log. They are produced by the
+// seeds generates settings, STATE.json and LOG.md. They are produced by the
 // binary — not copied from the scaffold — so `tomo update` never touches the
 // user's workspace state.
 func seeds() ([]scaffold.Seed, error) {
@@ -45,17 +47,16 @@ func seeds() ([]scaffold.Seed, error) {
 		return nil, err
 	}
 	stateData, err := json.MarshalIndent(map[string]any{
-		"change":    "",
-		"updatedAt": "",
-		"changes":   map[string]any{},
+		"schema":  kiso.Schema,
+		"changes": map[string]any{},
 	}, "", "  ")
 	if err != nil {
 		return nil, err
 	}
 	return []scaffold.Seed{
 		{Rel: ".tomo/settings.json", Data: append(settingsData, '\n')},
-		{Rel: ".tomo/state.json", Data: append(stateData, '\n')},
-		{Rel: ".tomo/log.md", Data: []byte{}},
+		{Rel: "STATE.json", Data: append(stateData, '\n')},
+		{Rel: "LOG.md", Data: []byte{}},
 	}, nil
 }
 
