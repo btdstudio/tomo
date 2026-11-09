@@ -12,9 +12,13 @@ This file applies to agents working on the tomo repo itself.
   `//go:embed all:scaffold` (`embed.go`). Edit the scaffold there; `tomo check`
   and the golden test (`internal/icm/golden_test.go`) pin it. After editing the
   scaffold, run `go test ./internal/icm -update` to regenerate the golden.
-- Workspace state is committed so approvals survive a clone: `STATE.json`,
-  `LOG.md`, `REPOS.json`, `.tomo/settings.json`, `.tomo/manifest.json`. Only
-  `.tomo/active`, `.tomo/paths.json` and `.tomo/SLIP.md` are local and gitignored — never commit them.
+- Workspace state is shared: `STATE.json`, `LOG.md`, `REPOS.json`,
+  `.tomo/settings.json`, `.tomo/manifest.json`. In a git workspace (the core
+  `vcs` setting, `git` by default) it's committed so approvals survive a clone;
+  with `vcs: none` tomo never runs git on the workspace. Only `.tomo/active`,
+  `.tomo/paths.json` and `.tomo/SLIP.md` are local and gitignored — never commit them.
+- Pass the effective `vcs` (`settings.Loaded.VCS`) to every store call that
+  records a transition and to the scaffold engine for `init` and `update`.
 
 ## Layout
 

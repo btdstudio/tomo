@@ -62,7 +62,12 @@ func runInit(args []string) int {
 			dir = a
 		}
 	}
-	rep, err := icm.Scaffold(dir, icm.Options{NoGit: noGit, Force: force})
+	vcs, err := settings.InitVCS(dir, noGit)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	rep, err := icm.Scaffold(dir, vcs, icm.Options{NoGit: noGit, Force: force})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
@@ -92,7 +97,12 @@ func runUpdate() int {
 	if icm.OldAppsDir(".") {
 		fmt.Println("note: code now lives outside the workspace. src/apps/ is left as it is; register it with `tomo repo add <name> <remote> --path <dir>`")
 	}
-	rep, err := icm.Update(".")
+	loaded, err := settings.LoadSettings(".")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	rep, err := icm.Update(".", loaded.VCS)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1

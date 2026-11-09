@@ -19,7 +19,7 @@ func workspace(t *testing.T) string {
 	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	root := t.TempDir()
-	if _, err := icm.Scaffold(root, icm.Options{NoGit: true}); err != nil {
+	if _, err := icm.Scaffold(root, "", icm.Options{NoGit: true}); err != nil {
 		t.Fatal(err)
 	}
 	if code := runRepo(root, []string{"add", "app", "https://github.com/org/app"}); code != 0 {
@@ -256,7 +256,7 @@ func TestRunNoArgs(t *testing.T) {
 func TestRunIssuesNewAndList(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	dir := t.TempDir()
-	if _, err := icm.Scaffold(dir, icm.Options{NoGit: true}); err != nil {
+	if _, err := icm.Scaffold(dir, "", icm.Options{NoGit: true}); err != nil {
 		t.Fatal(err)
 	}
 	if got := runIssues(dir, []string{"new", "--title", "Fix login"}); got != 1 {
@@ -471,6 +471,172 @@ func TestStripCredentials(t *testing.T) {
 	} {
 		if got := stripCredentials(in); got != want {
 			t.Errorf("stripCredentials(%q) = %q", in, got)
+		}
+	}
+}
+
+// capture runs f with stdout and stderr redirected, returning its exit code and
+// what it printed to each.
+func capture(t *testing.T, f func() int) (int, string, string) {
+	t.Helper()
+	outR, outW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	errR, errW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	origOut, origErr := os.Stdout, os.Stderr
+	os.Stdout, os.Stderr = outW, errW
+	code := f()
+	os.Stdout, os.Stderr = origOut, origErr
+	outW.Close()
+	errW.Close()
+	out, _ := io.ReadAll(outR)
+	errOut, _ := io.ReadAll(errR)
+	return code, string(out), string(errOut)
+}
+
+// writeProjectSettings replaces .tomo/settings.json with the given JSON object.
+func writeProjectSettings(t *testing.T, root, data string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(root, ".tomo", "settings.json"), []byte(data), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// bareWorkspace is a scaffolded root, outside any git repo, with a target repo
+// and no change yet.
+func bareWorkspace(t *testing.T) string {
+	t.Helper()
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	root := t.TempDir()
+	if _, err := icm.Scaffold(root, "", icm.Options{NoGit: true}); err != nil {
+		t.Fatal(err)
+	}
+	if code := runRepo(root, []string{"add", "app", "https://github.com/org/app"}); code != 0 {
+		t.Fatalf("repo add = %d", code)
+	}
+	return root
+}
+
+func TestLocalWorkspaceTransitionsDontCommitOrWarn(t *testing.T) {
+	root := bareWorkspace(t)
+	writeProjectSettings(t, root, `{"vcs": "none"}`)
+	steps := []struct {
+		name string
+		run  func() int
+	}{
+		{"change new", func() int { return runChange(root, []string{"new", "Auth flow"}) }},
+		{"gate", func() int { return runGate(root, []string{"intake", "approved"}) }},
+		{"reopen", func() int { return runReopen(root, []string{"intake", "--reason", "rethink"}) }},
+		{"change close", func() int { return runChange(root, []string{"close", "1-auth-flow", "--reason", "dropped"}) }},
+	}
+	for _, s := range steps {
+		code, _, errOut := capture(t, s.run)
+		if code != 0 || errOut != "" {
+			t.Fatalf("%s: code = %d, stderr = %q", s.name, code, errOut)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, ".git")); !os.IsNotExist(err) {
+		t.Fatalf(".git exists: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(state.ChangeDir(root, "1-auth-flow", ""), ".gitkeep")); !os.IsNotExist(err) {
+		t.Fatalf("change folder has a .gitkeep: %v", err)
+	}
+	if info, err := os.Stat(state.ChangeDir(root, "1-auth-flow", "")); err != nil || !info.IsDir() {
+		t.Fatalf("change folder missing: %v", err)
+	}
+	log := readLog(t, root)
+	if n := strings.Count(log, "1-auth-flow"); n != 4 {
+		t.Fatalf("LOG.md has %d entries for the change, want 4:\n%s", n, log)
+	}
+	changes, err := state.ReadChanges(root)
+	if err != nil || changes["1-auth-flow"] == nil {
+		t.Fatalf("STATE.json: %v, %v", changes, err)
+	}
+}
+
+func TestGitWorkspaceOutsideRepoWarnsWithHint(t *testing.T) {
+	root := bareWorkspace(t)
+	if code, _, _ := capture(t, func() int { return runChange(root, []string{"new", "Auth flow"}) }); code != 0 {
+		t.Fatalf("change new = %d", code)
+	}
+	code, _, errOut := capture(t, func() int { return runGate(root, []string{"intake", "approved"}) })
+	if code != 0 {
+		t.Fatalf("gate = %d, stderr = %q", code, errOut)
+	}
+	if !strings.Contains(errOut, "not in a git repo") || !strings.Contains(errOut, `set "vcs": "none"`) {
+		t.Fatalf("stderr = %q", errOut)
+	}
+	if st, err := state.LoadState(root); err != nil || st.Gates["intake"] != "approved" {
+		t.Fatalf("state = %+v, %v", st, err)
+	}
+}
+
+func TestInvalidVCSFailsGateWithoutChangingState(t *testing.T) {
+	root := workspace(t)
+	before, err := os.ReadFile(state.StatePath(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeProjectSettings(t, root, `{"vcs": "svn"}`)
+	code, _, errOut := capture(t, func() int { return runGate(root, []string{"intake", "approved"}) })
+	if code == 0 || !strings.Contains(errOut, `invalid vcs "svn"`) {
+		t.Fatalf("code = %d, stderr = %q", code, errOut)
+	}
+	after, err := os.ReadFile(state.StatePath(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Fatalf("STATE.json changed:\n%s", after)
+	}
+}
+
+func TestStatusShowsVCS(t *testing.T) {
+	root := bareWorkspace(t)
+	code, out, _ := capture(t, func() int { return runStatus(root) })
+	if code != 0 || out != "no active change\nvcs:      git\n" {
+		t.Fatalf("no setting, none active: code = %d, out = %q", code, out)
+	}
+	writeProjectSettings(t, root, `{"vcs": "none"}`)
+	code, out, _ = capture(t, func() int { return runStatus(root) })
+	if code != 0 || out != "no active change\nvcs:      none\n" {
+		t.Fatalf("none, none active: code = %d, out = %q", code, out)
+	}
+	if code := runChange(root, []string{"new", "Auth flow"}); code != 0 {
+		t.Fatalf("change new = %d", code)
+	}
+	code, out, _ = capture(t, func() int { return runStatus(root) })
+	if code != 0 || !strings.HasPrefix(out, "change:   1-auth-flow\n") || !strings.HasSuffix(out, "\nvcs:      none\n") {
+		t.Fatalf("none, active: code = %d, out = %q", code, out)
+	}
+}
+
+func TestSettingsShowsVCS(t *testing.T) {
+	root := bareWorkspace(t)
+	code, out, _ := capture(t, func() int { return runSettings(root) })
+	if code != 0 || !strings.Contains(out, "gates:       block\nvcs:         git\n") {
+		t.Fatalf("code = %d, out = %q", code, out)
+	}
+	writeProjectSettings(t, root, `{"vcs": "none"}`)
+	if _, out, _ := capture(t, func() int { return runSettings(root) }); !strings.Contains(out, "vcs:         none\n") {
+		t.Fatalf("out = %q", out)
+	}
+}
+
+func TestInvalidVCSFailsStatusAndSettings(t *testing.T) {
+	root := bareWorkspace(t)
+	writeProjectSettings(t, root, `{"vcs": "svn"}`)
+	for name, run := range map[string]func() int{
+		"status":   func() int { return runStatus(root) },
+		"settings": func() int { return runSettings(root) },
+	} {
+		code, _, errOut := capture(t, run)
+		if code == 0 || !strings.Contains(errOut, `invalid vcs "svn"`) {
+			t.Errorf("%s: code = %d, stderr = %q", name, code, errOut)
 		}
 	}
 }

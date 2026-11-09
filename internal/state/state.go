@@ -55,7 +55,9 @@ const DefaultArtifactDir = "01_planning/specs"
 // Tests override it to make output deterministic.
 var Now = time.Now
 
-func store(artifactDir string) kiso.Store {
+// store builds the state store. vcs is the workspace's core "vcs" setting; "" behaves
+// as git, which is right for helpers that never record a transition.
+func store(artifactDir, vcs string) kiso.Store {
 	if artifactDir == "" {
 		artifactDir = DefaultArtifactDir
 	}
@@ -63,6 +65,7 @@ func store(artifactDir string) kiso.Store {
 		Machine:   Machine,
 		SpecsDir:  filepath.FromSlash(artifactDir),
 		Commit:    true,
+		VCS:       vcs,
 		Schema:    Schema,
 		Now:       func() time.Time { return Now() },
 		Migrate:   migrate,
@@ -78,17 +81,17 @@ type (
 )
 
 func Workspace(root string) string  { return workspace.Dir(root, "tomo") }
-func StatePath(root string) string  { return store("").StatePath(root) }
+func StatePath(root string) string  { return store("", "").StatePath(root) }
 func ActivePath(root string) string { return workspace.ActivePath(root, "tomo") }
-func LogPath(root string) string    { return store("").LogPath(root) }
+func LogPath(root string) string    { return store("", "").LogPath(root) }
 func SlipPath(root string) string   { return filepath.Join(Workspace(root), "SLIP.md") }
 
-func SpecsDir(root, artifactDir string) string { return store(artifactDir).SpecsPath(root) }
+func SpecsDir(root, artifactDir string) string { return store(artifactDir, "").SpecsPath(root) }
 
 // ChangeDir returns the path to one change folder. An empty change resolves to
 // the specs base itself (a guard for ad-hoc outputs when nothing is active).
 func ChangeDir(root, change, artifactDir string) string {
-	return store(artifactDir).ChangeDir(root, change)
+	return store(artifactDir, "").ChangeDir(root, change)
 }
 
 // ArtifactPath is an artifact inside a specific change folder.
@@ -97,7 +100,7 @@ func ArtifactPath(root, change, name, artifactDir string) string {
 }
 
 // NextChangeId is the next sequential change id.
-func NextChangeId(root, artifactDir string) int { return store(artifactDir).NextID(root) }
+func NextChangeId(root, artifactDir string) int { return store(artifactDir, "").NextID(root) }
 
 // Slugify lowercases to a short kebab-case slug.
 func Slugify(text string) string { return kiso.Slugify(text) }
@@ -109,22 +112,22 @@ func DefaultState() State { return kiso.NewChange("") }
 func ReadActive(root string) (string, error) { return workspace.ReadActive(root, "tomo") }
 
 // LoadState resolves the active machine.
-func LoadState(root string) (State, error) { return store("").Load(root) }
+func LoadState(root string) (State, error) { return store("", "").Load(root) }
 
 // SaveState writes the change's record and makes it the active change.
-func SaveState(root string, st *State) error { return store("").Save(root, st) }
+func SaveState(root string, st *State) error { return store("", "").Save(root, st) }
 
 // ReadChanges returns the recorded changes.
-func ReadChanges(root string) (map[string]*State, error) { return store("").ReadChanges(root) }
+func ReadChanges(root string) (map[string]*State, error) { return store("", "").ReadChanges(root) }
 
 // KnownChanges lists the numbered folders under the artifact dir, sorted by id.
 func KnownChanges(root, artifactDir string) ([]KnownChange, error) {
-	return store(artifactDir).Known(root)
+	return store(artifactDir, "").Known(root)
 }
 
 // SwitchTo points the workspace at a different change folder.
 func SwitchTo(root, name, artifactDir string) (State, error) {
-	return store(artifactDir).Switch(root, name)
+	return store(artifactDir, "").Switch(root, name)
 }
 
 // SetGate starts the given phase and sets its status.
@@ -136,30 +139,30 @@ func SetGate(st *State, phase, status, reason string) error {
 func CheckGate(st State, phase, status string) error { return Machine.CheckGate(st, phase, status) }
 
 // SeedChange creates a change folder and records its initial machine, making it
-// the active change. Sources are committed with it, so a clone has what the record
-// points at.
-func SeedChange(root, name, artifactDir string, sources []string) (State, error) {
-	return store(artifactDir).Seed(root, name, kiso.SeedOptions{Sources: sources, Paths: sources})
+// the active change. In a git workspace the sources are committed with it, so a
+// clone has what the record points at.
+func SeedChange(root, name, artifactDir, vcs string, sources []string) (State, error) {
+	return store(artifactDir, vcs).Seed(root, name, kiso.SeedOptions{Sources: sources, Paths: sources})
 }
 
 // AdvanceGate sets a gate on the active change, logs it with any notes, and
-// commits.
-func AdvanceGate(root, artifactDir, phase, status, reason string, notes ...string) (State, error) {
-	return store(artifactDir).Advance(root, phase, status, reason, notes...)
+// commits in a git workspace.
+func AdvanceGate(root, artifactDir, vcs, phase, status, reason string, notes ...string) (State, error) {
+	return store(artifactDir, vcs).Advance(root, phase, status, reason, notes...)
 }
 
-// Reopen moves the active change back to a phase, logs it and commits.
-func Reopen(root, artifactDir, phase, reason string) (State, error) {
-	return store(artifactDir).Reopen(root, phase, reason)
+// Reopen moves the active change back to a phase, logs it and commits in a git workspace.
+func Reopen(root, artifactDir, vcs, phase, reason string) (State, error) {
+	return store(artifactDir, vcs).Reopen(root, phase, reason)
 }
 
-// CloseChange closes a change by name, logs it and commits.
-func CloseChange(root, artifactDir, name, reason string) (State, error) {
-	return store(artifactDir).CloseChange(root, name, reason)
+// CloseChange closes a change by name, logs it and commits in a git workspace.
+func CloseChange(root, artifactDir, vcs, name, reason string) (State, error) {
+	return store(artifactDir, vcs).CloseChange(root, name, reason)
 }
 
 // AppendLog appends one timestamped line to LOG.md.
-func AppendLog(root, line string) error { return store("").Log(root, line) }
+func AppendLog(root, line string) error { return store("", "").Log(root, line) }
 
 // migrate upgrades a schema 1 STATE.json. A change already underway has been past
 // intake, so intake counts as approved; later phases start empty.

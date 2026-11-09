@@ -60,11 +60,23 @@ func seeds() ([]scaffold.Seed, error) {
 	}, nil
 }
 
-// Scaffold writes the embedded tree into dir; see scaffold.Engine.Scaffold.
-func Scaffold(dir string, opts Options) (Report, error) { return engine.Scaffold(dir, opts) }
+// Scaffold writes the embedded tree into dir for a workspace with the given core
+// "vcs" setting ("" behaves as git); see scaffold.Engine.Scaffold.
+func Scaffold(dir, vcs string, opts Options) (Report, error) {
+	return engineFor(vcs).Scaffold(dir, opts)
+}
 
-// Update refreshes managed files; see scaffold.Engine.Update.
-func Update(dir string) (UpdateReport, error) { return engine.Update(dir) }
+// Update refreshes managed files for a workspace with the given core "vcs"
+// setting ("" behaves as git); see scaffold.Engine.Update.
+func Update(dir, vcs string) (UpdateReport, error) { return engineFor(vcs).Update(dir) }
+
+// engineFor is the scaffold engine for one workspace. The package engine stays the
+// whole tree, which is what Check and the manifest helpers describe.
+func engineFor(vcs string) scaffold.Engine {
+	e := engine
+	e.VCS = vcs
+	return e
+}
 
 // Check validates the embedded scaffold; see scaffold.Engine.Check.
 func Check() []string { return engine.Check() }

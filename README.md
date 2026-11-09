@@ -21,7 +21,7 @@ go install github.com/btdstudio/tomo/cmd/tomo@latest
 
 | Command | Purpose |
 |---|---|
-| `tomo init [dir]` | scaffold the ICM structure |
+| `tomo init [dir] [--no-git]` | scaffold the ICM structure; `--no-git` makes a local workspace (`vcs: none`) |
 | `tomo update` | refresh managed files to the installed version |
 | `tomo add kumi <name> --path <dir> --remote <url> [module-path]` | scaffold a [kumi Go+HTMX app](https://github.com/btdstudio/kumi) outside the workspace and make it the target repo |
 | `tomo add hanga <name> --path <dir> --remote <url>` | scaffold a [hanga site](https://github.com/btdstudio/hanga) outside the workspace and make it the target repo |
@@ -62,27 +62,49 @@ are finished; `--force` overrides this and records it in `LOG.md`. A test failur
 serious finding loops back with `tomo reopen implement`, which clears the approvals
 after it.
 
-State changes commit `STATE.json` and `LOG.md` for you, without pushing, and gates
-also commit the change's spec folder. `tomo commit` and `tomo pr` act on the target
-repo.
+In a git workspace, state changes commit `STATE.json` and `LOG.md` for you, without
+pushing, and gates also commit the change's spec folder. In a local workspace
+(`vcs: none`) they only write the files. `tomo commit` and `tomo pr` act on the
+target repo, which is always git.
 
 ## The workspace
 
 A workspace holds planning and state, and targets exactly one repo, which holds the
-code. Keep each workspace in its own git repo.
+code. Keep each workspace in its own git repo, or declare it local (see
+[Local workspaces](#local-workspaces)).
 
 ```
 ├── AGENTS.md          root map + routing table + command list
-├── STATE.json         per-change phase, gates, sources (committed)
-├── LOG.md             gate history (committed)
-├── REPOS.json         logical repos and remotes (committed)
-├── .tomo/             settings + manifest (committed), active change + repo paths (local)
+├── STATE.json         per-change phase, gates, sources (shared)
+├── LOG.md             gate history (shared)
+├── REPOS.json         logical repos and remotes (shared)
+├── .tomo/             settings + manifest (shared), active change + repo paths (local)
 ├── 00_issues/         tickets (<ID>.md)
 ├── 01_planning/       analyst + architect (specs, personas, templates)
 ├── 02_implementation/ coder
 ├── 03_testing/        qa
 └── 04_refactoring/    reviewer + security
 ```
+
+## Local workspaces
+
+The `vcs` setting says whether a workspace lives in git. It's a core
+[kiso](https://github.com/btdstudio/kiso) setting and goes in `.tomo/settings.json` or, for every workspace,
+`~/.config/tomo/settings.json`.
+
+| Value | Meaning |
+|---|---|
+| `git` (default) | `init` runs `git init` and scaffolds `.gitignore`, `.gitattributes` and `.gitkeep`. State changes and gates commit. |
+| `none` | Plain local files. `init` skips `git init` and the git files, `update` neither restores nor reports them, and state changes and gates write `STATE.json` and `LOG.md` without running git or warning. |
+
+`tomo init --no-git` records `"vcs": "none"`, and a global `vcs: none` applies to
+`init` too. `tomo status` and `tomo settings` show the mode. Any other value is an
+error.
+
+To move a local workspace into git, run `git init`, set `"vcs": "git"`, and run
+`tomo update` to put the git files back. That's also the fix if you used `--no-git`
+only to avoid a repo nested inside another one. Going the other way leaves existing
+git files on disk; tomo just stops managing them.
 
 ## Getting started
 
