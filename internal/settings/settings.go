@@ -98,3 +98,17 @@ func ReadIfExists(file string) (map[string]any, error) { return spec.ReadIfExist
 func MergeSettings(layers ...map[string]any) (Settings, error) { return spec.Merge(layers...) }
 
 func LoadSettings(root string) (Loaded, error) { return spec.Load(root) }
+
+// InitVCS is the core "vcs" setting a new workspace in dir gets: none with
+// --no-git, otherwise the effective value from the global settings and any
+// project settings already in dir.
+func InitVCS(dir string, noGit bool) (string, error) {
+	if noGit {
+		return core.VCSNone, nil
+	}
+	loaded, err := LoadSettings(dir)
+	if err != nil {
+		return "", err
+	}
+	return loaded.VCS, nil
+}

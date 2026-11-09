@@ -14,7 +14,7 @@ func scaffolded(t *testing.T) string {
 	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	dir := t.TempDir()
-	if _, err := Scaffold(dir, Options{NoGit: true}); err != nil {
+	if _, err := Scaffold(dir, "", Options{NoGit: true}); err != nil {
 		t.Fatal(err)
 	}
 	return dir

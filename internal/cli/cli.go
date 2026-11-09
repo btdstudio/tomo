@@ -71,6 +71,7 @@ func PrintUsage() {
 
 Usage:
   tomo init [dir] [--no-git] [--force]   scaffold the ICM structure
+                                          --no-git makes a local workspace (vcs: none)
   tomo update                             refresh managed files
   tomo add kumi|hanga <name> --path <p> --remote <url> [module]
                                           scaffold an app outside the workspace and target it
@@ -95,6 +96,11 @@ Usage:
 }
 
 func runStatus(root string) int {
+	loaded, err := settings.LoadSettings(root)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
 	st, err := state.LoadState(root)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -102,6 +108,7 @@ func runStatus(root string) int {
 	}
 	if st.Name == "" {
 		fmt.Println("no active change")
+		fmt.Printf("vcs:      %s\n", loaded.VCS)
 		return 0
 	}
 	fmt.Printf("change:   %s\n", st.Name)
@@ -116,6 +123,7 @@ func runStatus(root string) int {
 		fmt.Printf("ticket:   %s %s\n", t.ID, t.Title)
 		fmt.Printf("branch:   %s\n", branchName(t))
 	}
+	fmt.Printf("vcs:      %s\n", loaded.VCS)
 	return 0
 }
 
@@ -128,6 +136,7 @@ func runSettings(root string) int {
 	e := loaded.Effective
 	fmt.Printf("baseSource:  %s\n", e.BaseSource)
 	fmt.Printf("gates:       %s\n", e.Gates)
+	fmt.Printf("vcs:         %s\n", loaded.VCS)
 	fmt.Printf("artifactDir: %s\n", e.ArtifactDir)
 	fmt.Printf("issuesDir:   %s\n", e.IssuesDir)
 	fmt.Printf("syncFile:    %s\n", e.SyncFile)
@@ -221,16 +230,16 @@ func runChange(root string, args []string) int {
 				fmt.Fprintln(os.Stderr, "usage: tomo change new --from <ticket.md>")
 				return 1
 			}
-			return runChangeFrom(root, loaded.Effective, args[2])
+			return runChangeFrom(root, loaded.Effective, loaded.VCS, args[2])
 		}
-		return runChangeNew(root, loaded.Effective, args[1:])
+		return runChangeNew(root, loaded.Effective, loaded.VCS, args[1:])
 	case "close":
 		pos, reason, _, err := parseTransition(args[1:])
 		if err != nil || len(pos) != 1 {
 			fmt.Fprintln(os.Stderr, "usage: tomo change close <change> --reason <r>")
 			return 1
 		}
-		st, err := state.CloseChange(root, loaded.Effective.ArtifactDir, pos[0], reason)
+		st, err := state.CloseChange(root, loaded.Effective.ArtifactDir, loaded.VCS, pos[0], reason)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 1
@@ -242,7 +251,7 @@ func runChange(root string, args []string) int {
 	return 1
 }
 
-func runChangeNew(root string, e settings.Settings, args []string) int {
+func runChangeNew(root string, e settings.Settings, vcs string, args []string) int {
 	usage := "usage: tomo change new <title> [--issue <id>] [--body <b>]"
 	var title, body, issueID string
 	for i := 0; i < len(args); i++ {
@@ -290,18 +299,18 @@ func runChangeNew(root string, e settings.Settings, args []string) int {
 		}
 		issueID = it.ID
 	}
-	return seedFromTicket(root, e, title, issueID)
+	return seedFromTicket(root, e, vcs, title, issueID)
 }
 
 // seedFromTicket records a change whose source is a ticket in the store.
-func seedFromTicket(root string, e settings.Settings, title, id string) int {
+func seedFromTicket(root string, e settings.Settings, vcs, title, id string) int {
 	slug := state.Slugify(title)
 	if slug == "" {
 		slug = "change"
 	}
 	name := fmt.Sprintf("%d-%s", state.NextChangeId(root, e.ArtifactDir), slug)
 	rel := filepath.ToSlash(filepath.Join(e.IssuesDir, id+".md"))
-	st, err := state.SeedChange(root, name, e.ArtifactDir, []string{rel})
+	st, err := state.SeedChange(root, name, e.ArtifactDir, vcs, []string{rel})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
@@ -312,7 +321,7 @@ func seedFromTicket(root string, e settings.Settings, title, id string) int {
 
 // runChangeFrom starts a change from a planned ticket: it validates the file, checks
 // the ticket lands in this workspace's target repo, and snapshots it into the store.
-func runChangeFrom(root string, e settings.Settings, path string) int {
+func runChangeFrom(root string, e settings.Settings, vcs, path string) int {
 	fail := func(err error) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
@@ -349,7 +358,7 @@ func runChangeFrom(root string, e settings.Settings, path string) int {
 	if _, err := issues.Import(root, e.IssuesDir, t, origin); err != nil {
 		return fail(err)
 	}
-	return seedFromTicket(root, e, t.Title, t.ID)
+	return seedFromTicket(root, e, vcs, t.Title, t.ID)
 }
 
 // ticketOrigin says where a ticket file came from: the origin remote of the repo
@@ -475,7 +484,7 @@ func runGate(root string, args []string) int {
 			notes = append(notes, "override: "+violation.Error())
 		}
 	}
-	st, err = state.AdvanceGate(root, loaded.Effective.ArtifactDir, phase, status, reason, notes...)
+	st, err = state.AdvanceGate(root, loaded.Effective.ArtifactDir, loaded.VCS, phase, status, reason, notes...)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
@@ -495,7 +504,7 @@ func runReopen(root string, args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	st, err := state.Reopen(root, loaded.Effective.ArtifactDir, pos[0], reason)
+	st, err := state.Reopen(root, loaded.Effective.ArtifactDir, loaded.VCS, pos[0], reason)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1

@@ -87,3 +87,26 @@ func TestGlobalPathHonorsXDGConfigHome(t *testing.T) {
 		t.Fatalf("global path %q should start with %q", GlobalSettingsPath(), alt)
 	}
 }
+
+func TestInitVCS(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	dir := t.TempDir()
+	if got, err := InitVCS(dir, true); err != nil || got != "none" {
+		t.Fatalf("--no-git: %q, %v", got, err)
+	}
+	if got, err := InitVCS(dir, false); err != nil || got != "git" {
+		t.Fatalf("default: %q, %v", got, err)
+	}
+	writeSettings(t, GlobalSettingsPath(), map[string]any{"vcs": "none"})
+	if got, err := InitVCS(dir, false); err != nil || got != "none" {
+		t.Fatalf("global none: %q, %v", got, err)
+	}
+	writeSettings(t, ProjectSettingsPath(dir), map[string]any{"vcs": "git"})
+	if got, err := InitVCS(dir, false); err != nil || got != "git" {
+		t.Fatalf("project git over global none: %q, %v", got, err)
+	}
+	writeSettings(t, ProjectSettingsPath(dir), map[string]any{"vcs": "svn"})
+	if _, err := InitVCS(dir, false); err == nil || !strings.Contains(err.Error(), `invalid vcs "svn"`) {
+		t.Fatalf("invalid: %v", err)
+	}
+}
