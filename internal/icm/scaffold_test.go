@@ -135,7 +135,7 @@ func TestScaffoldAgentsWordingIsNeutralAboutCommits(t *testing.T) {
 			t.Errorf("AGENTS.md missing %q", want)
 		}
 	}
-	for _, banned := range []string{"(committed)", "Gates commit this workspace's"} {
+	for _, banned := range []string{"(committed)", "Gates commit this workspace's", ".gitignore            # git workspaces only"} {
 		if strings.Contains(text, banned) {
 			t.Errorf("AGENTS.md still says %q", banned)
 		}
