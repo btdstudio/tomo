@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -85,8 +86,9 @@ func TestScaffoldLocalWorkspace(t *testing.T) {
 	if _, err := Scaffold(dir, "none", Options{}); err != nil {
 		t.Fatal(err)
 	}
-	if found := gitFiles(t, dir); len(found) != 0 {
-		t.Fatalf("git files in a local workspace: %v", found)
+	// A local workspace keeps only .gitignore, so local files stay out of git.
+	if found := gitFiles(t, dir); !slices.Equal(found, []string{".gitignore"}) {
+		t.Fatalf("git files in a local workspace = %v, want only .gitignore", found)
 	}
 	for _, kept := range []string{"00_issues", "01_planning/specs", "03_testing/reports", "04_refactoring/reviews"} {
 		if info, err := os.Stat(filepath.Join(dir, filepath.FromSlash(kept))); err != nil || !info.IsDir() {
@@ -106,9 +108,12 @@ func TestScaffoldLocalWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	for rel := range m.Files {
-		if scaffold.IsGitFile(rel) {
+		if scaffold.IsGitFile(rel) && rel != ".gitignore" {
 			t.Errorf("manifest lists git file %s", rel)
 		}
+	}
+	if _, ok := m.Files[".gitignore"]; !ok {
+		t.Errorf("manifest doesn't list .gitignore")
 	}
 }
 
