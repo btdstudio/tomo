@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/btdstudio/kiso/scaffold"
@@ -107,6 +108,31 @@ func TestScaffoldLocalWorkspace(t *testing.T) {
 	for rel := range m.Files {
 		if scaffold.IsGitFile(rel) {
 			t.Errorf("manifest lists git file %s", rel)
+		}
+	}
+}
+
+// AC12: the scaffolded AGENTS.md makes workspace commits conditional on git and
+// keeps the target-repo commit text.
+func TestScaffoldAgentsWordingIsNeutralAboutCommits(t *testing.T) {
+	data, err := fs.ReadFile(engine.FS, "AGENTS.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{
+		"In a git workspace, `tomo change new`, `gate`, `reopen`",
+		"With `vcs: none`\n  they only write the files; nothing is committed.",
+		"`tomo commit` and `tomo pr` act on the target repo, which is always git.",
+		"commit what's staged in the target repo",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("AGENTS.md missing %q", want)
+		}
+	}
+	for _, banned := range []string{"(committed)", "Gates commit this workspace's"} {
+		if strings.Contains(text, banned) {
+			t.Errorf("AGENTS.md still says %q", banned)
 		}
 	}
 }

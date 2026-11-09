@@ -31,7 +31,7 @@ again against the fixed code.
 
 | Command | Purpose |
 |---|---|
-| `tomo init [dir]` | scaffold this ICM structure |
+| `tomo init [dir] [--no-git]` | scaffold this ICM structure; `--no-git` makes a local workspace (`vcs: none`) |
 | `tomo update` | refresh managed files to the installed version |
 | `tomo add kumi <name> --path <dir> --remote <url> [module-path]` | scaffold a kumi Go+HTMX app outside the workspace and make it the target repo |
 | `tomo add hanga <name> --path <dir> --remote <url>` | scaffold a hanga site outside the workspace and make it the target repo |
@@ -97,16 +97,20 @@ it like `git` or `gh`. Prefer `tomo <command>` over hand-editing `STATE.json` or
   when a human says so.
 - Use `tomo reopen <phase> --reason <r>` to go back: it clears the approvals after
   that phase, because they no longer hold.
-- `tomo change new`, `gate`, `reopen` and `change close` commit `STATE.json` and
-  `LOG.md` for you, leaving anything else you have staged alone. `gate` also commits
-  the change's spec folder, so write the artifact before you gate it. They don't push.
+- The workspace's `vcs` setting says whether it lives in git: `git` (the
+  default) or `none`. In a git workspace, `tomo change new`, `gate`, `reopen`
+  and `change close` commit `STATE.json` and `LOG.md` for you, leaving anything
+  else you have staged alone, and `gate` also commits the change's spec folder,
+  so write the artifact before you gate it. They don't push. With `vcs: none`
+  they only write the files; nothing is committed.
 - Read only the files the routing table names for your task; skip the rest.
 - Code lives in the target repo, not in this workspace. A workspace targets exactly
   one repo: `tomo repo list` shows where it is, and `tomo env` prints the flags that
   give a harness access to it, such as `eval claude $(tomo env)`. Read the target
   repo's own `AGENTS.md` before touching its code.
-- `tomo commit` and `tomo pr` act on the target repo. Gates commit this workspace's
-  specs; commit anything else here, such as issues you edit later, with plain `git`.
+- `tomo commit` and `tomo pr` act on the target repo, which is always git. In a
+  git workspace, commit anything else here, such as issues you edit later,
+  with plain `git`.
 - Always write or update tests for new behavior.
 - Use conventional commit messages.
 
@@ -119,12 +123,12 @@ it like `git` or `gh`. Prefer `tomo <command>` over hand-editing `STATE.json` or
 ```
 ├── CLAUDE.md
 ├── AGENTS.md
-├── .gitignore
-├── .gitattributes
-├── STATE.json            # per-change phase, gates, sources (committed)
-├── LOG.md                # gate history (committed)
-├── REPOS.json            # logical repos and remotes (committed)
-├── .tomo/                # settings + manifest (committed), active change + repo paths (local)
+├── .gitignore            # git workspaces only
+├── .gitattributes        # git workspaces only
+├── STATE.json            # per-change phase, gates, sources (shared)
+├── LOG.md                # gate history (shared)
+├── REPOS.json            # logical repos and remotes (shared)
+├── .tomo/                # settings + manifest (shared), active change + repo paths (local)
 ├── 00_issues/            # tickets (<ID>.md)
 ├── 01_planning/          # analyst + architect
 ├── 02_implementation/    # coder
