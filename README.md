@@ -95,16 +95,17 @@ The `vcs` setting says whether a workspace lives in git. It's a core
 | Value | Meaning |
 |---|---|
 | `git` (default) | `init` runs `git init` and scaffolds `.gitignore`, `.gitattributes` and `.gitkeep`. State changes and gates commit. |
-| `none` | Plain local files. `init` skips `git init` and the git files, `update` neither restores nor reports them, and state changes and gates write `STATE.json` and `LOG.md` without running git or warning. |
+| `none` | Plain local files. `init` skips `git init`, `.gitattributes` and `.gitkeep`, and `update` neither restores nor reports them. It keeps `.gitignore`, so `.tomo/active`, `.tomo/paths.json` and `.tomo/SLIP.md` stay out of an enclosing repo or one you create later. State changes and gates write `STATE.json` and `LOG.md` without running git or warning. |
 
 `tomo init --no-git` records `"vcs": "none"`, and a global `vcs: none` applies to
 `init` too. `tomo status` and `tomo settings` show the mode. Any other value is an
 error.
 
 To move a local workspace into git, run `git init`, set `"vcs": "git"`, and run
-`tomo update` to put the git files back. That's also the fix if you used `--no-git`
-only to avoid a repo nested inside another one. Going the other way leaves existing
-git files on disk; tomo just stops managing them.
+`tomo update` to put `.gitattributes` and `.gitkeep` back; `.gitignore` is already
+there. That's also the fix if you used `--no-git` only to avoid a repo nested inside
+another one. Going the other way leaves existing git files on disk; tomo just stops
+managing them.
 
 ## Getting started
 

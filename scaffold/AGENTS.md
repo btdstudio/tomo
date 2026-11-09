@@ -123,7 +123,7 @@ it like `git` or `gh`. Prefer `tomo <command>` over hand-editing `STATE.json` or
 ```
 ├── CLAUDE.md
 ├── AGENTS.md
-├── .gitignore            # git workspaces only
+├── .gitignore            # keeps local files out of git
 ├── .gitattributes        # git workspaces only
 ├── STATE.json            # per-change phase, gates, sources (shared)
 ├── LOG.md                # gate history (shared)

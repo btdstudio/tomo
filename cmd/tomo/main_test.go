@@ -9,8 +9,9 @@ import (
 	"github.com/btdstudio/kiso/scaffold"
 )
 
-// assertLocal checks dir is a local workspace: no git files, the kept folders,
-// "vcs": "none" in its settings, and no git file in the manifest.
+// assertLocal checks dir is a local workspace: .gitignore and no other git file,
+// the kept folders, "vcs": "none" in its settings, and a manifest that lists
+// .gitignore and no other git file.
 func assertLocal(t *testing.T, dir string) {
 	t.Helper()
 	err := filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
@@ -18,7 +19,8 @@ func assertLocal(t *testing.T, dir string) {
 			return err
 		}
 		rel, _ := filepath.Rel(dir, p)
-		if d.Name() == ".git" || scaffold.IsGitFile(filepath.ToSlash(rel)) {
+		rel = filepath.ToSlash(rel)
+		if d.Name() == ".git" || (scaffold.IsGitFile(rel) && rel != ".gitignore") {
 			t.Errorf("git file in a local workspace: %s", rel)
 		}
 		return nil
@@ -42,9 +44,15 @@ func assertLocal(t *testing.T, dir string) {
 		t.Fatalf("manifest = %s, %v", data, err)
 	}
 	for rel := range m.Files {
-		if scaffold.IsGitFile(rel) {
+		if scaffold.IsGitFile(rel) && rel != ".gitignore" {
 			t.Errorf("manifest lists git file %s", rel)
 		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".gitignore")); err != nil {
+		t.Errorf(".gitignore missing: %v", err)
+	}
+	if _, ok := m.Files[".gitignore"]; !ok {
+		t.Errorf("manifest doesn't list .gitignore")
 	}
 }
 
