@@ -25,6 +25,22 @@
 
 <Step-by-step behavior for the main flows, aligned to the acceptance criteria.>
 
+## Diagrams
+
+<Optional: one sequence diagram of the main flow. Rename the participants and
+messages to fit, or delete this section if a diagram wouldn't add anything.>
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant CLI
+    participant Store
+    User->>CLI: command
+    CLI->>Store: read or write
+    Store-->>CLI: result
+    CLI-->>User: output
+```
+
 ## Interfaces
 
 <Module boundaries, function/CLI/API shapes, config, env vars.>

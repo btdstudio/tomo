@@ -141,3 +141,57 @@ func TestScaffoldAgentsWordingIsNeutralAboutCommits(t *testing.T) {
 		}
 	}
 }
+
+// designTemplate is the scaffold's design template.
+const designTemplate = "01_planning/templates/design.md"
+
+// TestDesignTemplateHasOptionalDiagram pins the optional Diagrams section: where it
+// sits, that it says it's optional, and that its Mermaid renders as written.
+func TestDesignTemplateHasOptionalDiagram(t *testing.T) {
+	data, err := fs.ReadFile(engine.FS, designTemplate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(string(data), "\n")
+	var headings []string
+	diagrams := -1
+	for i, line := range lines {
+		if h, ok := strings.CutPrefix(line, "## "); ok {
+			headings = append(headings, h)
+			if h == "Diagrams" {
+				diagrams = i
+			}
+		}
+	}
+	want := []string{"Overview", "Context", "Design decisions", "Architecture / components", "Data flow / behavior", "Diagrams", "Interfaces", "Out of scope (deferred)", "Open items / risks", "Notes"}
+	if !slices.Equal(headings, want) {
+		t.Fatalf("headings = %q, want %q", headings, want)
+	}
+	next := ""
+	for _, line := range lines[diagrams+1:] {
+		if strings.TrimSpace(line) != "" {
+			next = line
+			break
+		}
+	}
+	if !strings.HasPrefix(next, "<Optional") {
+		t.Errorf("the Diagrams section doesn't open with an <Optional …> line: %q", next)
+	}
+	if n := strings.Count(string(data), "```mermaid"); n != 1 {
+		t.Fatalf("%d mermaid fences, want 1", n)
+	}
+	_, rest, _ := strings.Cut(string(data), "```mermaid\n")
+	fence, _, ok := strings.Cut(rest, "```")
+	if !ok {
+		t.Fatal("the mermaid fence isn't closed")
+	}
+	if first, _, _ := strings.Cut(fence, "\n"); first != "sequenceDiagram" {
+		t.Errorf("the fence starts with %q, want sequenceDiagram", first)
+	}
+	if !strings.Contains(fence, "->>") {
+		t.Error("the diagram has no message arrow")
+	}
+	if bare := strings.NewReplacer("-->>", "", "->>", "").Replace(fence); strings.ContainsAny(bare, "<>") {
+		t.Errorf("the diagram has a <…> placeholder, which isn't valid Mermaid:\n%s", fence)
+	}
+}
