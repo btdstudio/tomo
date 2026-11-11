@@ -401,12 +401,60 @@ func ticketOrigin(path string) (ticket.Origin, error) {
 	return ticket.Origin{Workspace: workspace, Path: filepath.ToSlash(rel)}, nil
 }
 
+// stripCredentials removes anything secret from a remote before it's recorded.
+// Only a URL remote, one starting with <scheme>://, can carry a secret; anything
+// else, such as scp-like git@host:path or a local path, is returned as is. From
+// a URL remote it cuts the query and fragment, and the userinfo, except that ssh
+// schemes keep a non-empty username. It cuts the original string rather than
+// re-encoding it, so a clean remote comes back byte-identical. A URL remote
+// net/url can't parse gives "" if it has an @, ? or #, since where the secret
+// ends is unclear; the caller then records the folder name.
 func stripCredentials(remote string) string {
-	if u, err := url.Parse(remote); err == nil && u.User != nil && (u.Scheme == "http" || u.Scheme == "https") {
-		u.User = nil
-		return u.String()
+	scheme, rest, ok := strings.Cut(remote, "://")
+	if !ok || !validScheme(scheme) {
+		return remote
 	}
-	return remote
+	u, err := url.Parse(remote)
+	if err != nil {
+		if strings.ContainsAny(remote, "@?#") {
+			return ""
+		}
+		return remote
+	}
+	if i := strings.IndexAny(rest, "?#"); i >= 0 {
+		rest = rest[:i]
+	}
+	authority, path := rest, ""
+	if i := strings.IndexByte(rest, '/'); i >= 0 {
+		authority, path = rest[:i], rest[i:]
+	}
+	if i := strings.LastIndexByte(authority, '@'); i >= 0 {
+		userinfo, host := authority[:i], authority[i+1:]
+		switch u.Scheme {
+		case "ssh", "git+ssh", "ssh+git":
+			authority = host
+			if user, _, _ := strings.Cut(userinfo, ":"); user != "" {
+				authority = user + "@" + host
+			}
+		default:
+			authority = host
+		}
+	}
+	return scheme + "://" + authority + path
+}
+
+// validScheme reports whether s is a URL scheme: a letter, then any of letters,
+// digits, plus, hyphen and dot.
+func validScheme(s string) bool {
+	for i, r := range s {
+		switch {
+		case 'a' <= r && r <= 'z', 'A' <= r && r <= 'Z':
+		case i > 0 && ('0' <= r && r <= '9' || r == '+' || r == '-' || r == '.'):
+		default:
+			return false
+		}
+	}
+	return s != ""
 }
 
 // changeTicket returns the ticket a change started from, if its source is one.

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -599,15 +600,92 @@ func TestPublishedTicketImportsFrozenAndPRLinksIt(t *testing.T) {
 	}
 }
 
+// stripCases are stripCredentials' inputs, expected outputs, and the secrets each
+// input carries, none of which may survive.
+var stripCases = []struct {
+	in, want string
+	secrets  []string
+}{
+	// ssh keeps the username and loses the password (AC1, AC2).
+	{"ssh://user:pw@host/org/plan.git", "ssh://user@host/org/plan.git", []string{"pw"}},
+	{"git+ssh://user:pw@host/org/plan.git", "git+ssh://user@host/org/plan.git", []string{"pw"}},
+	{"ssh+git://user:pw@host/org/plan.git", "ssh+git://user@host/org/plan.git", []string{"pw"}},
+	{"SSH://user:pw@host/org/plan.git", "SSH://user@host/org/plan.git", []string{"pw"}},
+	{"ssh://user:@host:2222/org/plan.git", "ssh://user@host:2222/org/plan.git", nil},
+	{"ssh://:pw@host/org/plan.git", "ssh://host/org/plan.git", []string{"pw", "@"}},
+	{"ssh://git@host/org/plan.git", "ssh://git@host/org/plan.git", nil},
+	{"https://github.com/o/a@b.git", "https://github.com/o/a@b.git", nil},
+	// Other schemes lose all userinfo (AC3).
+	{"ftps://user:pw@host/org/plan.git", "ftps://host/org/plan.git", []string{"pw", "user"}},
+	{"https://user:token@github.com/o/r.git", "https://github.com/o/r.git", []string{"token", "user"}},
+	{"https://token@github.com/o/r.git", "https://github.com/o/r.git", []string{"token"}},
+	{"https://@github.com/o/r.git", "https://github.com/o/r.git", nil},
+	{"https://a@b:c@github.com/o/r.git", "https://github.com/o/r.git", []string{"a@b", "c@"}},
+	// The query and fragment go, whatever the scheme (AC4).
+	{"https://github.com/org/plan.git?token=abc#x", "https://github.com/org/plan.git", []string{"abc", "#x"}},
+	{"https://github.com/org/plan.git?", "https://github.com/org/plan.git", nil},
+	{"https://github.com/org/plan.git#", "https://github.com/org/plan.git", nil},
+	{"https://github.com/org/plan.git#a?b", "https://github.com/org/plan.git", []string{"a?b"}},
+	{"https://github.com?token=abc", "https://github.com", []string{"abc"}},
+	{"ssh://git@host/org/plan.git?token=abc", "ssh://git@host/org/plan.git", []string{"abc"}},
+	{"https://h/x?%zz", "https://h/x", []string{"%zz"}},
+	{"https://u:pw@github.com/o/r.git?token=abc", "https://github.com/o/r.git", []string{"pw", "abc"}},
+	// Non-URL remotes are unchanged (AC5).
+	{"git@github.com:o/r.git", "git@github.com:o/r.git", nil},
+	{"github.com:o/r.git", "github.com:o/r.git", nil},
+	{"host:a://b", "host:a://b", nil},
+	{"git@host:org/x://y?z", "git@host:org/x://y?z", nil},
+	{"://u:pw@host/x", "://u:pw@host/x", nil},
+	{"/srv/plan.git", "/srv/plan.git", nil},
+	{"", "", nil},
+	// A clean URL remote is byte-identical, escapes included (AC6).
+	{"https://dev.azure.com/org/My%20Project/_git/plan", "https://dev.azure.com/org/My%20Project/_git/plan", nil},
+	{"ssh://git@ssh.dev.azure.com:22/v3/org/My%20Project/plan", "ssh://git@ssh.dev.azure.com:22/v3/org/My%20Project/plan", nil},
+	{"https://user:pw@dev.azure.com/org/My%20Project/_git/plan", "https://dev.azure.com/org/My%20Project/_git/plan", []string{"pw"}},
+	// A URL remote Go can't parse records nothing if it might hold a secret (AC9).
+	{"ssh://user:p#w@h/x", "", []string{"p#w"}},
+	{"https://u:pw@h/%zz", "", []string{"pw"}},
+	{"ssh://h:bad/x", "ssh://h:bad/x", nil},
+}
+
 func TestStripCredentials(t *testing.T) {
-	for in, want := range map[string]string{
-		"https://user:token@github.com/o/r.git": "https://github.com/o/r.git",
-		"https://token@github.com/o/r.git":      "https://github.com/o/r.git",
-		"git@github.com:o/r.git":                "git@github.com:o/r.git",
-		"":                                      "",
-	} {
-		if got := stripCredentials(in); got != want {
-			t.Errorf("stripCredentials(%q) = %q", in, got)
+	for _, c := range stripCases {
+		got := stripCredentials(c.in)
+		if got != c.want {
+			t.Errorf("stripCredentials(%q) = %q, want %q", c.in, got, c.want)
+		}
+		for _, s := range c.secrets {
+			if strings.Contains(got, s) {
+				t.Errorf("stripCredentials(%q) = %q, which keeps %q", c.in, got, s)
+			}
+		}
+	}
+}
+
+// TestStripCredentialsOutputInvariants checks each stripped URL as net/url reads
+// it: no password, a username only for ssh, no query or fragment, and the input's
+// host and path.
+func TestStripCredentialsOutputInvariants(t *testing.T) {
+	for _, c := range stripCases {
+		in, err := url.Parse(c.in)
+		if err != nil || in.Scheme == "" || in.Opaque != "" {
+			continue
+		}
+		got := stripCredentials(c.in)
+		out, err := url.Parse(got)
+		if err != nil {
+			t.Errorf("stripCredentials(%q) = %q, which doesn't parse: %v", c.in, got, err)
+			continue
+		}
+		ssh := out.Scheme == "ssh" || out.Scheme == "git+ssh" || out.Scheme == "ssh+git"
+		if _, ok := out.User.Password(); ok || (out.User != nil && !ssh) {
+			t.Errorf("stripCredentials(%q) = %q keeps userinfo %q", c.in, got, out.User)
+		}
+		if out.RawQuery != "" || out.ForceQuery || out.Fragment != "" || strings.ContainsAny(got, "?#") {
+			t.Errorf("stripCredentials(%q) = %q keeps a query or fragment", c.in, got)
+		}
+		if out.Host != in.Host || out.EscapedPath() != in.EscapedPath() {
+			t.Errorf("stripCredentials(%q) = %q: host/path %q %q, want %q %q", c.in, got, out.Host, out.EscapedPath(), in.Host, in.EscapedPath())
 		}
 	}
 }
