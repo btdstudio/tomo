@@ -132,10 +132,12 @@ One planned elsewhere comes in as a snapshot:
 tomo change new --from ../planning/specs/1-release/tickets/S-0014.md
 ```
 
-It has to be ready or published, and land in this workspace's target repo. If it's been
-published, the analyst reads the live item first, following `01_planning/sync.md`, and
-requirements become a confirmation of what was already approved. It's still a gate,
-because tomo approves something zumen didn't: how this ticket lands in this repo.
+It has to be ready or published, and land in this workspace's target repo. A ready ticket
+must have been readied through zumen (`zumen tickets ready`). One set to ready by hand, or
+edited since, is refused. If it's been published, the analyst reads the live item first,
+following `01_planning/sync.md`, and requirements become a confirmation of what was
+already approved. It's still a gate, because tomo approves something zumen didn't: how
+this ticket lands in this repo.
 
 On ship, `tomo status` suggests a branch that includes the ticket's id, and `tomo pr`
 links the ticket, its external ids, spec and ADRs. Neither tool needs the other to run.
