@@ -60,6 +60,26 @@ func gitCmd(t *testing.T, root string, args ...string) string {
 	return string(out)
 }
 
+// realGit skips unless git is on PATH, and isolates it from the developer's
+// global and system config, so a user-level setting such as url.*.insteadOf can't
+// change what a test sees. global is the file `git config --global` reads and
+// writes; empty means none. HOME and XDG_CONFIG_HOME also cover git versions
+// older than 2.32, which ignore GIT_CONFIG_GLOBAL.
+func realGit(t *testing.T, global string) {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not on PATH")
+	}
+	if global == "" {
+		global = os.DevNull
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("GIT_CONFIG_GLOBAL", global)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+}
+
 func TestChangeNewCreatesIssueAndSeeds(t *testing.T) {
 	root := workspace(t)
 	st, err := state.LoadState(root)
@@ -347,6 +367,7 @@ func writeTicket(t *testing.T, dir, name, body string) string {
 }
 
 func TestChangeFromTicketSnapshotsAndSeeds(t *testing.T) {
+	realGit(t, "")
 	root := workspace(t)
 	planning := t.TempDir()
 	gitCmd(t, planning, "init", "-q")
@@ -381,6 +402,70 @@ func TestChangeFromTicketSnapshotsAndSeeds(t *testing.T) {
 	}
 	if got := branchName(snap); got != "s-0014-add-release-workflow" {
 		t.Fatalf("branch = %q", got)
+	}
+}
+
+// TestChangeFromOrigin pins what an import records as origin.workspace: the
+// planning repo's configured remote, without credentials and untouched by
+// insteadOf rewrites, or the folder's name when there is no remote to record.
+func TestChangeFromOrigin(t *testing.T) {
+	const plan = "https://github.com/org/plan.git"
+	folder := func(dir string) string { return filepath.Base(dir) }
+	for _, c := range []struct {
+		name   string
+		global bool // give git a writable global config
+		setup  func(t *testing.T, dir string)
+		want   func(dir string) string
+	}{
+		{"local insteadOf", false, func(t *testing.T, dir string) {
+			gitCmd(t, dir, "init", "-q")
+			gitCmd(t, dir, "remote", "add", "origin", plan)
+			gitCmd(t, dir, "config", "url.git@github.com:.insteadOf", "https://github.com/")
+		}, func(string) string { return plan }},
+		{"global insteadOf", true, func(t *testing.T, dir string) {
+			gitCmd(t, dir, "init", "-q")
+			gitCmd(t, dir, "remote", "add", "origin", plan)
+			gitCmd(t, dir, "config", "--global", "url.git@github.com:.insteadOf", "https://github.com/")
+		}, func(string) string { return plan }},
+		{"token", false, func(t *testing.T, dir string) {
+			gitCmd(t, dir, "init", "-q")
+			gitCmd(t, dir, "remote", "add", "origin", "https://token@github.com/org/plan.git")
+		}, func(string) string { return plan }},
+		{"no origin", false, func(t *testing.T, dir string) {
+			gitCmd(t, dir, "init", "-q")
+		}, folder},
+		{"not a repo", false, func(t *testing.T, dir string) {
+			t.Setenv("GIT_CEILING_DIRECTORIES", filepath.Dir(dir))
+		}, folder},
+		{"git missing", false, func(t *testing.T, dir string) {
+			t.Setenv("PATH", t.TempDir())
+		}, folder},
+		{"scp-like", false, func(t *testing.T, dir string) {
+			gitCmd(t, dir, "init", "-q")
+			gitCmd(t, dir, "remote", "add", "origin", "git@github.com:org/plan.git")
+		}, func(string) string { return "git@github.com:org/plan.git" }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			global := ""
+			if c.global {
+				global = filepath.Join(t.TempDir(), "gitconfig")
+			}
+			realGit(t, global)
+			root := workspace(t)
+			planning := t.TempDir()
+			path := writeTicket(t, planning, "S-0014.md", plannedTicket)
+			c.setup(t, planning)
+			if code := runChange(root, []string{"new", "--from", path}); code != 0 {
+				t.Fatalf("change new --from = %d", code)
+			}
+			snap, err := issues.Read(root, "00_issues", "S-0014")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := c.want(planning); snap.Origin.Workspace != want || snap.Origin.Path != "S-0014.md" {
+				t.Fatalf("origin = %+v, want workspace %q", snap.Origin, want)
+			}
+		})
 	}
 }
 
