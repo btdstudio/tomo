@@ -432,7 +432,8 @@ func branchName(t *ticket.Ticket) string {
 	return name
 }
 
-// prBody links a pull request to its ticket: id, external items, spec and ADRs.
+// prBody links a pull request to its ticket: id, external items, where it was
+// planned and that change's overview, spec and ADRs.
 func prBody(t *ticket.Ticket) string {
 	lines := []string{fmt.Sprintf("Implements %s: %s", t.ID, t.Title), ""}
 	tools := make([]string, 0, len(t.External))
@@ -445,6 +446,9 @@ func prBody(t *ticket.Ticket) string {
 	}
 	if t.Origin.Workspace != "" {
 		lines = append(lines, fmt.Sprintf("- **Planned in:** %s (`%s`)", t.Origin.Workspace, t.Origin.Path))
+		if link := overviewLink(t.Origin); link != "" {
+			lines = append(lines, "- **Overview:** "+link)
+		}
 	}
 	if t.Spec != "" {
 		lines = append(lines, fmt.Sprintf("- **Spec:** `%s`", t.Spec))

@@ -140,7 +140,9 @@ already approved. It's still a gate, because tomo approves something zumen didn'
 this ticket lands in this repo.
 
 On ship, `tomo status` suggests a branch that includes the ticket's id, and `tomo pr`
-links the ticket, its external ids, spec and ADRs. Neither tool needs the other to run.
+links the ticket, its external ids, spec and ADRs. When the planning repo is on GitHub or
+Azure DevOps, it also links the change's overview, the `README.md` next to the ticket's
+`tickets/` folder. Neither tool needs the other to run.
 
 ## Development
 
