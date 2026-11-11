@@ -364,6 +364,9 @@ func runChangeFrom(root string, e settings.Settings, vcs, path string) int {
 // ticketOrigin says where a ticket file came from: the origin remote of the repo
 // holding it, without credentials, and its path there. Outside a repo, or without a
 // remote, the workspace is the folder's name, so no local path gets committed.
+// The remote is the configured remote.origin.url, not what `git remote get-url`
+// prints: that applies url.*.insteadOf rewrites, which are one machine's setup and
+// don't belong in a committed ticket.
 func ticketOrigin(path string) (ticket.Origin, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
@@ -391,7 +394,7 @@ func ticketOrigin(path string) (ticket.Origin, error) {
 	if err != nil {
 		return ticket.Origin{}, err
 	}
-	workspace := stripCredentials(gitOut("remote", "get-url", "origin"))
+	workspace := stripCredentials(gitOut("config", "--get", "remote.origin.url"))
 	if workspace == "" {
 		workspace = filepath.Base(top)
 	}
