@@ -336,7 +336,9 @@ func TestEnvPrintsFlagsForRegisteredRepos(t *testing.T) {
 	}
 }
 
-const plannedTicket = `---
+// rawPlannedTicket is a ready ticket without the readiness mark, as if set to
+// ready by hand. Use plannedTicket for one readied the way zumen does it.
+const rawPlannedTicket = `---
 schema: 1
 id: S-0014                 # planned in zumen
 type: story
@@ -356,6 +358,23 @@ Why.
 ## Acceptance criteria
 - [ ] AC1: Given a tag When pushed Then a release is cut
 `
+
+// plannedTicket is rawPlannedTicket readied with kiso's MarkReady, so its
+// ready_hash matches its content.
+var plannedTicket = readied(rawPlannedTicket)
+
+// readied returns body with its readiness mark set by MarkReady. It panics on a
+// fixture kiso can't parse or ready, which is a bug in the test.
+func readied(body string) string {
+	tk, err := ticket.Parse([]byte(body))
+	if err != nil {
+		panic(err)
+	}
+	if err := tk.MarkReady(); err != nil {
+		panic(err)
+	}
+	return string(tk.Bytes())
+}
 
 func writeTicket(t *testing.T, dir, name, body string) string {
 	t.Helper()
@@ -469,21 +488,26 @@ func TestChangeFromOrigin(t *testing.T) {
 	}
 }
 
+// TestChangeFromRefusals checks each refusal is for its own reason. Cases edit
+// rawPlannedTicket and ready the result where it stays ready, so an edit isn't
+// refused as "changed since readied" instead.
 func TestChangeFromRefusals(t *testing.T) {
 	root := workspace(t)
 	dir := t.TempDir()
-	for name, c := range map[string]struct{ file, body string }{
-		"wrong repo":     {"S-0014.md", strings.Replace(plannedTicket, "repo: app", "repo: other", 1)},
-		"draft":          {"S-0014.md", strings.Replace(plannedTicket, "status: ready", "status: draft", 1)},
-		"no criteria":    {"S-0014.md", strings.Replace(plannedTicket, "- [ ] AC1: Given a tag When pushed Then a release is cut\n", "", 1)},
-		"not a ticket":   {"S-0014.md", "just text"},
-		"name mismatch":  {"other.md", plannedTicket},
-		"epic":           {"E-0001.md", strings.NewReplacer("id: S-0014", "id: E-0001", "type: story", "type: epic", "repo: app\n", "").Replace(plannedTicket)},
-		"drifted frozen": {"S-0014.md", strings.Replace(plannedTicket, "status: ready", "status: published\nexternal:\n  github: o/r#1\npublished_hash: abc", 1)},
+	raw := rawPlannedTicket
+	for name, c := range map[string]struct{ file, body, reason string }{
+		"wrong repo":     {"S-0014.md", readied(strings.Replace(raw, "repo: app", "repo: other", 1)), `lands in repo "other"`},
+		"draft":          {"S-0014.md", strings.Replace(raw, "status: ready", "status: draft", 1), "only a ready or published ticket"},
+		"no criteria":    {"S-0014.md", readied(strings.Replace(raw, "- [ ] AC1: Given a tag When pushed Then a release is cut\n", "", 1)), "requires at least one acceptance criterion"},
+		"not a ticket":   {"S-0014.md", "just text", "must start with"},
+		"name mismatch":  {"other.md", plannedTicket, "doesn't match id"},
+		"epic":           {"E-0001.md", readied(strings.NewReplacer("id: S-0014", "id: E-0001", "type: story", "type: epic", "repo: app\n", "").Replace(raw)), `lands in repo ""`},
+		"drifted frozen": {"S-0014.md", strings.Replace(raw, "status: ready", "status: published\nexternal:\n  github: o/r#1\npublished_hash: abc", 1), "changed since it was published"},
 	} {
 		path := writeTicket(t, dir, c.file, c.body)
-		if code := runChange(root, []string{"new", "--from", path}); code != 1 {
-			t.Errorf("%s: code = %d, want 1", name, code)
+		code, _, errOut := capture(t, func() int { return runChange(root, []string{"new", "--from", path}) })
+		if code != 1 || !strings.Contains(errOut, c.reason) {
+			t.Errorf("%s: code = %d, stderr = %q, want 1 and %q", name, code, errOut, c.reason)
 		}
 		os.Remove(path)
 	}
@@ -495,6 +519,34 @@ func TestChangeFromRefusals(t *testing.T) {
 	}
 	if _, err := os.Stat(state.ChangeDir(root, "2-add-release-workflow", "")); err == nil {
 		t.Fatal("a refused import created a change")
+	}
+}
+
+// TestChangeFromRefusesUnreadiedTicket pins ADR-0001: a ready ticket imports only
+// with a readiness mark that still matches its content.
+func TestChangeFromRefusesUnreadiedTicket(t *testing.T) {
+	for _, c := range []struct{ name, body, reason string }{
+		{"set ready by hand", rawPlannedTicket, "not readied through the CLI"},
+		{"body edited", strings.Replace(plannedTicket, "Why.", "Why not.", 1), "body changed since readied"},
+		{"frontmatter edited", strings.Replace(plannedTicket, "title: Add release workflow", "title: Add a release workflow", 1), "frontmatter changed since readied"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if c.body == plannedTicket {
+				t.Fatal("the edit didn't apply")
+			}
+			root := workspace(t)
+			path := writeTicket(t, t.TempDir(), "S-0014.md", c.body)
+			code, _, errOut := capture(t, func() int { return runChange(root, []string{"new", "--from", path}) })
+			if code != 1 || !strings.Contains(errOut, c.reason) {
+				t.Fatalf("code = %d, stderr = %q, want 1 and %q", code, errOut, c.reason)
+			}
+			if _, err := os.Stat(filepath.Join(root, "00_issues", "S-0014.md")); err == nil {
+				t.Fatal("a refused import left a snapshot")
+			}
+			if _, err := os.Stat(state.ChangeDir(root, "2-add-release-workflow", "")); err == nil {
+				t.Fatal("a refused import created a change")
+			}
+		})
 	}
 }
 
